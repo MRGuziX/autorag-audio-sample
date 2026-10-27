@@ -1,0 +1,34 @@
+[
+  {
+    "question": "Jak długo trwało decydujące starcie pod Wielkim Kopcem?",
+    "correct_answers": [
+      "7 godzin",
+      "siedem godzin"
+    ],
+    "correct_answer_document_keys": [
+      "audio/capybara_story.m4a"
+    ]
+  },
+  {
+    "question": "Ilu żołnierzy ocalało z wielkiej armii termitów?",
+    "correct_answers": [
+      "128 432",
+      "128432",
+      "sto dwadzieścia osiem tysięcy czterystu trzydziestu dwóch"
+    ],
+    "correct_answer_document_keys": [
+      "audio/termites_story.wav"
+    ]
+  },
+  {
+    "question": "Jakiej długości był taktyczny język Barnaby?",
+    "correct_answers": [
+      "60 centymetrów",
+      "60 cm",
+      "sześćdziesiąt centymetrów"
+    ],
+    "correct_answer_document_keys": [
+      "audio/anteater_story.mp3"
+    ]
+  }
+]

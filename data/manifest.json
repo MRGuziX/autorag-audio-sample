@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "rights_status": "private_use_authorized_public_clearance_pending",
+  "label_review_status": "draft_from_reference_text_listening_review_pending",
+  "files": [
+    {
+      "id": "anteater-mp3",
+      "path": "audio/anteater_story.mp3",
+      "object_key": "audio/anteater_story.mp3",
+      "sha256": "1490c48a557e896cc72aecc82db62e8a2e6b200fdc0ad97928bae0aeefea4c9a",
+      "bytes": 1439617,
+      "duration_seconds": 115.91517,
+      "codec": "mp3",
+      "sample_rate": 44100,
+      "channels": 1,
+      "language": "pl",
+      "source": "Original author-recorded RHOAIENG-80950 audio; private sample use authorised by Tomasz Guzik on 2026-10-26",
+      "derived_from": null
+    },
+    {
+      "id": "termites-wav",
+      "path": "audio/termites_story.wav",
+      "object_key": "audio/termites_story.wav",
+      "sha256": "1fc009a84b16b74322ca6d8549b36542a858058c52cd57da4611143eb8e2d61d",
+      "bytes": 12262620,
+      "duration_seconds": 139.031474,
+      "codec": "pcm_s16le",
+      "sample_rate": 44100,
+      "channels": 1,
+      "language": "pl",
+      "source": "Original author-recorded RHOAIENG-80950 audio; private sample use authorised by Tomasz Guzik on 2026-10-26",
+      "derived_from": null
+    },
+    {
+      "id": "capybara-wav",
+      "path": "audio/capybara_story.wav",
+      "object_key": "audio/capybara_story.wav",
+      "sha256": "4e84f7ce2bc22970098392348914c90aeb930145241b16c75c2e673622cab129",
+      "bytes": 3704910,
+      "duration_seconds": 115.776,
+      "codec": "pcm_s16le",
+      "sample_rate": 16000,
+      "channels": 1,
+      "language": "pl",
+      "source": "Original author-recorded RHOAIENG-80950 audio; private sample use authorised by Tomasz Guzik on 2026-10-26",
+      "derived_from": "capybara-m4a"
+    },
+    {
+      "id": "capybara-m4a",
+      "path": "validation/original/capybara_story.m4a",
+      "object_key": "audio/capybara_story.m4a",
+      "sha256": "b827907947f1b528bfda97858b2d2d773726547aeadb3b7718dd30660487d054",
+      "bytes": 979024,
+      "duration_seconds": 115.776,
+      "codec": "aac",
+      "sample_rate": 48000,
+      "channels": 1,
+      "language": "pl",
+      "source": "Original author-recorded RHOAIENG-80950 audio; private sample use authorised by Tomasz Guzik on 2026-10-26",
+      "derived_from": null
+    }
+  ],
+  "profiles": {
+    "wav-mp3": {
+      "files": [
+        "anteater-mp3",
+        "termites-wav",
+        "capybara-wav"
+      ],
+      "benchmark": "benchmark.json",
+      "holdout": "holdout.json"
+    },
+    "original-three": {
+      "files": [
+        "anteater-mp3",
+        "termites-wav",
+        "capybara-m4a"
+      ],
+      "benchmark": "validation/benchmark.original.json",
+      "holdout": "validation/holdout.original.json"
+    }
+  }
+}

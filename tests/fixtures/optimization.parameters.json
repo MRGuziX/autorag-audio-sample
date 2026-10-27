@@ -1,0 +1,58 @@
+{
+  "pipelineInfo": {
+    "name": "documents-rag-optimization-pipeline"
+  },
+  "root": {
+    "inputDefinitions": {
+      "parameters": {
+        "test_data_secret_name": {
+          "parameterType": "STRING"
+        },
+        "test_data_bucket_name": {
+          "parameterType": "STRING"
+        },
+        "test_data_key": {
+          "parameterType": "STRING"
+        },
+        "input_data_secret_name": {
+          "parameterType": "STRING"
+        },
+        "input_data_bucket_name": {
+          "parameterType": "STRING"
+        },
+        "maas_secret_name": {
+          "parameterType": "STRING"
+        },
+        "db_secret_name": {
+          "parameterType": "STRING"
+        },
+        "embedding_models": {
+          "parameterType": "LIST"
+        },
+        "generation_models": {
+          "parameterType": "LIST"
+        },
+        "input_data_keys": {
+          "parameterType": "LIST",
+          "isOptional": true,
+          "defaultValue": []
+        },
+        "optimization_metric": {
+          "parameterType": "STRING",
+          "isOptional": true,
+          "defaultValue": "overall_score"
+        },
+        "optimization_max_rag_patterns": {
+          "parameterType": "NUMBER_INTEGER",
+          "isOptional": true,
+          "defaultValue": 5
+        },
+        "preset": {
+          "parameterType": "STRING",
+          "isOptional": true,
+          "defaultValue": "speed"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+.idea/
+.venv/
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.env
+.env.*
+!.env.example
+work/
+samples/user/*
+!samples/user/.gitkeep
+.DS_Store

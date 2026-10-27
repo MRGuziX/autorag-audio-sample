@@ -1,0 +1,79 @@
+{
+  "pipelineInfo": {
+    "name": "documents-indexing-pipeline"
+  },
+  "root": {
+    "inputDefinitions": {
+      "parameters": {
+        "maas_secret_name": {
+          "parameterType": "STRING"
+        },
+        "db_secret_name": {
+          "parameterType": "STRING"
+        },
+        "embedding_model_id": {
+          "parameterType": "STRING"
+        },
+        "input_data_secret_name": {
+          "parameterType": "STRING"
+        },
+        "input_data_bucket_name": {
+          "parameterType": "STRING"
+        },
+        "input_data_keys": {
+          "parameterType": "LIST",
+          "isOptional": true
+        },
+        "collection_name": {
+          "parameterType": "STRING",
+          "isOptional": true
+        },
+        "embedding_params": {
+          "parameterType": "STRUCT",
+          "isOptional": true
+        },
+        "foundation_model_id": {
+          "parameterType": "STRING",
+          "isOptional": true
+        },
+        "foundation_model_params": {
+          "parameterType": "STRUCT",
+          "isOptional": true
+        },
+        "chunking_method": {
+          "parameterType": "STRING",
+          "isOptional": true,
+          "defaultValue": "recursive"
+        },
+        "chunk_size": {
+          "parameterType": "NUMBER_INTEGER",
+          "isOptional": true,
+          "defaultValue": 1024
+        },
+        "chunk_overlap": {
+          "parameterType": "NUMBER_INTEGER",
+          "isOptional": true,
+          "defaultValue": 0
+        },
+        "batch_size": {
+          "parameterType": "NUMBER_INTEGER",
+          "isOptional": true,
+          "defaultValue": 20
+        },
+        "ocr_lang": {
+          "parameterType": "STRING",
+          "isOptional": true
+        },
+        "graph_extraction_config": {
+          "parameterType": "STRUCT",
+          "isOptional": true
+        },
+        "preset": {
+          "parameterType": "STRING",
+          "isOptional": true,
+          "defaultValue": "speed"
+        }
+      }
+    }
+  }
+}

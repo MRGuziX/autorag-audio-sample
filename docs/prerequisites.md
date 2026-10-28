@@ -55,9 +55,9 @@ model-size selector. Historical turbo/GPU recommendations are not evidence of th
 implementation. Confirm the actual backend/model, effective model path, image/modelcar digests,
 Docling/Transformers/ffmpeg versions, resource usage and original-format decode results.
 
-ffmpeg/ffprobe on your workstation is needed only for preparing your own corpus or checking/converting
-audio locally. The bundled manifest can be validated without it. Workstation decode success does
-not establish decode support in the product container.
+You do not need ffmpeg/ffprobe on your workstation to run this starter. Audio decoding happens
+in the pipeline image. Local decoding, if you investigate a file separately, does not establish
+support in the product container.
 
 ## Disconnected environments
 

@@ -10,6 +10,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from dotenv import dotenv_values
+from lib.artifacts import download_run_artifacts
 from lib.indexing import prepare
 from lib.openshift import context_info, oc
 from lib.pipelines import all_items, discover_endpoint, pin_pipeline, read_package, remote_call, submit
@@ -18,7 +19,6 @@ from lib.sample import (
     OPTIMIZATION_PIPELINE,
     ROOT,
     cli,
-    load_sample,
     non_placeholder,
     optimization_params,
     read_json,
@@ -27,7 +27,7 @@ from lib.sample import (
     validate_pipeline_params,
     write_json,
 )
-from lib.storage import stage, upload_plan
+from lib.storage import s3_client, stage, upload_plan
 
 
 def read_env(path: Path) -> dict[str, str]:
@@ -62,7 +62,7 @@ def model_list(env: dict, name: str) -> list[str]:
 
 
 def configuration(env: dict) -> dict:
-    """Match AutoX CI variable names; default scenario parameters match TC-P-5."""
+    """Match AutoX CI variable names; use the same dataset paths for execution and uploads."""
     mapping = {
         "bucket": "INPUT_DATA_BUCKET_NAME",
         "input_data_secret_name": "INPUT_DATA_SECRET_NAME",
@@ -82,38 +82,24 @@ def configuration(env: dict) -> dict:
         test_data_secret_name=env.get("TEST_DATA_SECRET_NAME", "").strip()
         or config["input_data_secret_name"],
         test_data_bucket_name=env.get("TEST_DATA_BUCKET_NAME", "").strip() or config["bucket"],
-        prefix=env.get("AUTORAG_S3_PREFIX", "autorag-audio/sample-v1").strip(),
-        dataset_dir=env.get("AUTORAG_DATASET_DIR", "data").strip(),
-        profile=env.get("AUTORAG_PROFILE", "original-three").strip(),
         preset=env.get("AUTORAG_PRESET", "speed").strip(),
         embedding_models=model_list(env, "AUTORAG_EMBEDDING_MODELS"),
         generation_models=model_list(env, "AUTORAG_GENERATION_MODELS"),
         optimization_metric=env.get("AUTORAG_OPTIMIZATION_METRIC", "answer_correctness").strip(),
         optimization_max_rag_patterns=patterns,
     )
+    raw = env.get("AUTORAG_INPUT_DATA_KEYS", '["data/rag/audio/sample/documents"]').strip()
+    try:
+        config["input_data_keys"] = json.loads(raw)
+    except json.JSONDecodeError:
+        raise ValueError("AUTORAG_INPUT_DATA_KEYS must be a JSON array with one audio directory") from None
+    config["test_data_key"] = env.get("AUTORAG_TEST_DATA_KEY", "data/rag/audio/sample/benchmark.json").strip()
     if flag(env, "AUTORAG_UPLOAD_TEST_DATASETS"):
-        require(
-            not env.get("AUTORAG_INPUT_DATA_KEYS", "").strip()
-            and not env.get("AUTORAG_TEST_DATA_KEY", "").strip(),
-            "For uploads, clear AUTORAG_INPUT_DATA_KEYS and AUTORAG_TEST_DATA_KEY; "
-            "paths derive from AUTORAG_S3_PREFIX",
-        )
         require(
             config["test_data_bucket_name"] == config["bucket"]
             and config["test_data_secret_name"] == config["input_data_secret_name"],
             "Uploads require the same input and benchmark bucket and Connection",
         )
-    else:
-        raw = env.get("AUTORAG_INPUT_DATA_KEYS", '["datasets/rag/audio/documents"]').strip()
-        try:
-            config["input_data_keys"] = json.loads(raw)
-        except json.JSONDecodeError:
-            raise ValueError(
-                "AUTORAG_INPUT_DATA_KEYS must be a JSON array with one audio directory"
-            ) from None
-        config["test_data_key"] = env.get(
-            "AUTORAG_TEST_DATA_KEY", "datasets/rag/audio/benchmark_data.json"
-        ).strip()
     return validate_config(config)
 
 
@@ -160,23 +146,10 @@ def client_for(env: dict, namespace: str):
 
 
 def upload(env: dict, config: dict, plan: list[dict]) -> None:
-    import boto3
     from botocore.exceptions import BotoCoreError, ClientError
 
-    # Only explicitly selected AWS fields are passed; don't mutate or save the caller's environment.
-    kwargs = {
-        "endpoint_url": env.get("AWS_ENDPOINT_URL_S3") or env.get("AWS_S3_ENDPOINT"),
-        "region_name": env.get("AWS_DEFAULT_REGION") or "us-east-1",
-    }
-    for variable, argument in (
-        ("AWS_ACCESS_KEY_ID", "aws_access_key_id"),
-        ("AWS_SECRET_ACCESS_KEY", "aws_secret_access_key"),
-        ("AWS_SESSION_TOKEN", "aws_session_token"),
-    ):
-        if env.get(variable):
-            kwargs[argument] = env[variable]
     try:
-        stage(boto3.client("s3", **kwargs), config["bucket"], config["prefix"], plan)
+        stage(s3_client(env), config["bucket"], config["input_data_keys"][0], plan)
     except (BotoCoreError, ClientError) as exc:
         code = (
             exc.response["Error"].get("Code", "unknown")
@@ -191,10 +164,28 @@ def main(argv=None):
     parser.add_argument("--env-file", type=Path, default=ROOT / ".env")
     parser.add_argument("--kind", choices=("optimization", "indexing"), default="optimization")
     parser.add_argument(
+        "--download-run", help="Download artifacts for an existing local run name; no submission"
+    )
+    parser.add_argument(
         "--dry-run", action="store_true", help="Check local inputs only; no cluster or S3 requests"
     )
     args = parser.parse_args(argv)
     env = read_env(args.env_file)
+    download_enabled = flag(env, "DOWNLOAD_ARTIFACTS")
+    if args.download_run:
+        require(not args.dry_run, "Use --dry-run for experiment validation, or --download-run for downloads")
+        require(
+            bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", args.download_run))
+            and args.download_run not in {".", ".."},
+            "Invalid run name",
+        )
+        directory = ROOT / "work/runs" / args.download_run
+        receipt = read_json(directory / "receipt.json")
+        require(receipt["state"] == "SUCCEEDED", "Artifact download requires a succeeded run receipt")
+        target = read_json(directory / "target.json")
+        client, _ = client_for({**env, "RHOAI_KFP_URL": target["endpoint"]}, target["namespace"])
+        download_run_artifacts(client, env, directory)
+        return
     config = configuration(env)
     namespace = env.get("RHOAI_PROJECT_NAME", "").strip()
     non_placeholder(namespace, "RHOAI_PROJECT_NAME")
@@ -213,8 +204,7 @@ def main(argv=None):
         collection = env.get("AUTORAG_COLLECTION_NAME", "").strip()
         non_placeholder(collection, "AUTORAG_COLLECTION_NAME")
         pattern = read_json(Path(env["AUTORAG_PATTERN_FILE"]))
-    elif "input_data_keys" not in config:
-        load_sample(config["profile"], dataset_dir=config["dataset_dir"])
+    elif flag(env, "AUTORAG_UPLOAD_TEST_DATASETS"):
         plan = upload_plan(config)
     name = OPTIMIZATION_PIPELINE if args.kind == "optimization" else INDEXING_PIPELINE
     path_variable = (
@@ -236,6 +226,14 @@ def main(argv=None):
         f"Pipeline source: local package {local_path}" if local_path else f"Pipeline source: managed {name}"
     )
     print(f"Audio: s3://{config['bucket']}/{params['input_data_keys'][0]}")
+    if args.kind == "optimization":
+        print(
+            f"Dataset upload: enabled; {len(plan)} local files will be verified in S3 before submission"
+            if plan is not None
+            else "Dataset upload: disabled; using existing S3 objects (AUTORAG_UPLOAD_TEST_DATASETS=false)"
+        )
+    else:
+        print("Dataset upload: skipped for indexing; reusing existing S3 objects")
     if args.kind == "optimization":
         print(f"Benchmark: s3://{params['test_data_bucket_name']}/{params['test_data_key']}")
         print(
@@ -316,6 +314,8 @@ def main(argv=None):
     )
     print(f"Completed {args.kind}; run ID: {run_id}")
     print(f"Run details: {endpoint.rstrip('/')}/#/runs/details/{run_id}")
+    if download_enabled:
+        download_run_artifacts(client, env, directory)
 
 
 if __name__ == "__main__":

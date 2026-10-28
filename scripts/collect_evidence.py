@@ -29,8 +29,8 @@ def main():
     parser.add_argument("--output", type=Path, default=ROOT / "work/evidence.json")
     args = parser.parse_args()
     config = configuration(read_env(args.env_file))
-    manifest, files, _, holdout = load_sample(config["profile"], dataset_dir=config["dataset_dir"])
-    questions = render_config_questions(holdout, config)
+    files, benchmark = load_sample(config["input_data_keys"][0], config["test_data_key"])
+    questions = render_config_questions(benchmark, config)
     if args.answer_template:
         require(
             not args.answer_template.exists(), "Answer worksheet exists; use a new path to preserve reviews"
@@ -74,11 +74,12 @@ def main():
     expected = {row["question"]: set(row["correct_answer_document_keys"]) for row in questions}
     if args.answers:
         require(
-            isinstance(answers, list) and len(answers) == len(expected), "Review every held-out question once"
+            isinstance(answers, list) and len(answers) == len(expected),
+            "Review every benchmark question once",
         )
         require(
             {row["question"] for row in answers} == set(expected),
-            "Answers do not match fixed holdout questions",
+            "Answers do not match benchmark questions",
         )
         for row in answers:
             require(row["review_status"] == "reviewed", "Every answer must be reviewed against the recording")
@@ -101,19 +102,17 @@ def main():
         {
             "schema_version": 1,
             "status": "local_checklist_not_a_product_certification",
-            "profile": config["profile"],
-            "rights_status": manifest["rights_status"],
-            "label_review_status": manifest["label_review_status"],
+            "input_data_keys": config["input_data_keys"],
+            "test_data_key": config["test_data_key"],
             "corpus": {
                 "clips": len(files),
                 "bytes": sum(f["bytes"] for f in files),
-                "seconds": sum(f["duration_seconds"] for f in files),
                 "sha256": {f["object_key"]: f["sha256"] for f in files},
             },
             "runs": runs,
             "selected_pattern_sha256": sha256(args.pattern) if args.pattern else None,
-            "holdout": {
-                "total": len(holdout),
+            "benchmark_answers": {
+                "total": len(benchmark),
                 "reviewed": len(answers),
                 "factual_pass": sum(row["factual_pass"] for row in answers),
                 "source_pass": sum(row["source_pass"] for row in answers),

@@ -66,9 +66,8 @@ def validate_config(config: dict) -> dict:
     """Validate the configuration resolved from .env."""
     expected = {
         "bucket",
-        "prefix",
-        "profile",
-        "dataset_dir",
+        "input_data_keys",
+        "test_data_key",
         "input_data_secret_name",
         "test_data_secret_name",
         "maas_secret_name",
@@ -79,16 +78,18 @@ def validate_config(config: dict) -> dict:
         "optimization_max_rag_patterns",
         "preset",
     }
-    optional = {"input_data_keys", "test_data_key", "test_data_bucket_name"}
+    optional = {"test_data_bucket_name"}
     require(
         isinstance(config, dict) and expected <= set(config) and not set(config) - expected - optional,
         "Unexpected or missing experiment configuration fields",
     )
-    for name in expected - {"embedding_models", "generation_models", "optimization_max_rag_patterns"}:
+    for name in expected - {
+        "embedding_models",
+        "generation_models",
+        "optimization_max_rag_patterns",
+        "input_data_keys",
+    }:
         non_placeholder(config[name], name)
-    relative_path(config["prefix"])
-    local_path(config["dataset_dir"])
-    require(len(config["prefix"].split("/")) >= 2, "Use a dedicated S3 prefix with at least two segments")
     require("/" not in config["bucket"] and ":" not in config["bucket"], "bucket must be a bucket name")
     if "test_data_bucket_name" in config:
         bucket = config["test_data_bucket_name"]
@@ -102,11 +103,11 @@ def validate_config(config: dict) -> dict:
     patterns = config["optimization_max_rag_patterns"]
     require(type(patterns) is int and 4 <= patterns <= 10, "optimization_max_rag_patterns must be 4–10")
     if {"input_data_keys", "test_data_key"} & config.keys():
-        require({"input_data_keys", "test_data_key"} <= config.keys(), "Set both existing S3 path overrides")
+        require({"input_data_keys", "test_data_key"} <= config.keys(), "Set both S3 dataset paths")
         keys = config["input_data_keys"]
         require(
             isinstance(keys, list) and len(keys) == 1,
-            "Existing-S3 mode requires one explicit audio directory",
+            "Set one explicit S3 audio directory",
         )
         non_placeholder(keys[0], "input_data_keys")
         require(len(relative_path(keys[0].rstrip("/")).split("/")) >= 2, "Use a dedicated audio directory")
@@ -140,72 +141,52 @@ def validate_questions(rows, allowed_keys: set[str], label: str) -> None:
                 non_placeholder(value, f"{label}[{i}].{name}")
         require(
             set(row["correct_answer_document_keys"]) <= allowed_keys,
-            f"{label}[{i}] refers to audio outside this profile: {row['correct_answer_document_keys']}",
+            f"{label}[{i}] refers to a missing audio file: {row['correct_answer_document_keys']}",
         )
 
 
 def load_sample(
-    profile: str, root: Path = ROOT, dataset_dir: str = "data", manifest: dict | None = None
-) -> tuple[dict, list[dict], list, list]:
-    dataset_root = local_path(dataset_dir, root)
-    if manifest is None:
-        manifest = read_json(dataset_root / "manifest.json")
-    require(manifest.get("schema_version") == 1, "Unsupported data manifest version")
-    require(profile in manifest["profiles"], f"Unknown profile: {profile}")
-    by_id = {entry["id"]: entry for entry in manifest["files"]}
-    require(len(by_id) == len(manifest["files"]), "Duplicate manifest file ID")
-    spec = manifest["profiles"][profile]
-    require(bool(spec["files"]) and len(set(spec["files"])) == len(spec["files"]), "Invalid profile file IDs")
-    files = [by_id[file_id] for file_id in spec["files"]]
-    keys = set()
-    for entry in files:
-        key = relative_path(entry["object_key"])
-        require(key.startswith("audio/") and len(key.split("/")) == 2, "Audio keys must be audio/<filename>")
-        require(key not in keys, f"Duplicate object key: {key}")
-        require(Path(key).suffix in {".wav", ".mp3", ".m4a"}, f"Unsupported sample audio extension: {key}")
-        keys.add(key)
-        path = local_path(entry["path"], dataset_root)
-        require(path.is_file(), f"Missing clip: {path}")
-        require(path.stat().st_size == entry["bytes"], f"Size mismatch: {path}")
-        require(sha256(path) == entry["sha256"], f"Checksum mismatch: {path}")
-        duration = entry["duration_seconds"]
+    documents_dir: str = "data/rag/audio/sample/documents",
+    benchmark_key: str | None = None,
+    root: Path = ROOT,
+) -> tuple[list[dict], list]:
+    """Read local files at the configured S3 paths; no preparation file needed."""
+    audio_dir = local_path(documents_dir.rstrip("/"), root)
+    dataset_root = audio_dir.parent
+    require(audio_dir.is_dir(), f"Create {audio_dir} and drop your recordings there")
+    files = []
+    for path in sorted(audio_dir.iterdir()):
+        if path.name.startswith("."):
+            continue
         require(
-            type(duration) in (float, int) and math.isfinite(duration) and duration > 0, "Invalid duration"
+            path.is_file() and path.suffix.lower() in {".wav", ".mp3", ".m4a"},
+            f"Unsupported audio entry: {path.name}; use WAV, MP3 or M4A files",
         )
-    benchmark = read_json(local_path(spec["benchmark"], dataset_root))
-    holdout = read_json(local_path(spec["holdout"], dataset_root)) if spec.get("holdout") else []
-    validate_questions(benchmark, keys, "benchmark")
-    if spec.get("holdout"):
-        validate_questions(holdout, keys, "holdout")
-
-    def normalize(row):
-        return " ".join(row["question"].casefold().split())
-
-    require(
-        not {normalize(row) for row in benchmark} & {normalize(row) for row in holdout}, "Holdout leakage"
-    )
-    checks = [("benchmark", benchmark)] + ([("holdout", holdout)] if holdout else [])
-    for label, rows in checks:
-        coverage = {key for row in rows for key in row["correct_answer_document_keys"]}
-        require(coverage == keys, f"{label} does not cover every clip in {profile}")
-    return manifest, files, benchmark, holdout
-
-
-def render_questions(rows: list, prefix: str) -> list:
-    relative_path(prefix)
-    return [
-        {
-            **row,
-            "correct_answer_document_keys": [
-                f"{prefix}/{relative_path(k)}" for k in row["correct_answer_document_keys"]
-            ],
-        }
-        for row in rows
-    ]
+        require(path.resolve().is_relative_to(dataset_root), f"Audio symlink leaves dataset: {path.name}")
+        require(path.stat().st_size > 0, f"Empty audio file: {path.name}")
+        files.append(
+            {
+                "path": f"{documents_dir.rstrip('/')}/{path.name}",
+                "object_key": f"{documents_dir.rstrip('/')}/{path.name}",
+                "bytes": path.stat().st_size,
+                "sha256": sha256(path),
+            }
+        )
+    require(bool(files), f"Drop at least one audio file into {audio_dir}")
+    benchmark_path = local_path(benchmark_key, root) if benchmark_key else dataset_root / "benchmark.json"
+    require(benchmark_path.is_file(), f"Add your questions and expected answers to {benchmark_path}")
+    benchmark = read_json(benchmark_path)
+    allowed = {
+        key
+        for entry in files
+        for key in (entry["object_key"], entry["path"], f"documents/{Path(entry['path']).name}")
+    }
+    validate_questions(benchmark, allowed, "benchmark")
+    return files, benchmark
 
 
 def input_keys(config: dict) -> list[str]:
-    return list(config.get("input_data_keys", [f"{config['prefix']}/audio/"]))
+    return list(config["input_data_keys"])
 
 
 def render_config_questions(rows: list, config: dict) -> list:
@@ -241,7 +222,7 @@ def optimization_params(config: dict) -> dict:
         "test_data_bucket_name": config.get("test_data_bucket_name", config["bucket"]),
         "input_data_bucket_name": config["bucket"],
         "input_data_keys": input_keys(config),
-        "test_data_key": config.get("test_data_key", f"{config['prefix']}/benchmark.json"),
+        "test_data_key": config["test_data_key"],
     }
 
 

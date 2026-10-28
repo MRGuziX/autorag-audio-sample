@@ -55,12 +55,12 @@ def mock_client(kind="optimization"):
 
 
 class EnvRunnerTests(unittest.TestCase):
-    def test_defaults_match_tc_p_5_and_support_separate_benchmark_bucket(self):
+    def test_defaults_select_sample_and_support_separate_benchmark_bucket(self):
         env = environment()
         env["TEST_DATA_BUCKET_NAME"] = "benchmark-bucket"
         params = runner.optimization_params(runner.configuration(env))
-        self.assertEqual(params["input_data_keys"], ["datasets/rag/audio/documents"])
-        self.assertEqual(params["test_data_key"], "datasets/rag/audio/benchmark_data.json")
+        self.assertEqual(params["input_data_keys"], ["data/rag/audio/sample/documents"])
+        self.assertEqual(params["test_data_key"], "data/rag/audio/sample/benchmark.json")
         self.assertEqual(params["optimization_metric"], "answer_correctness")
         self.assertEqual(params["optimization_max_rag_patterns"], 4)
         self.assertEqual(params["test_data_bucket_name"], "benchmark-bucket")
@@ -82,7 +82,7 @@ class EnvRunnerTests(unittest.TestCase):
             ("AUTORAG_EMBEDDING_MODELS", "[bad json"),
             ("AUTORAG_MAX_RAG_PATTERNS", "3"),
             ("AUTORAG_INPUT_DATA_KEYS", "[]"),
-            ("AUTORAG_TEST_DATA_KEY", "datasets/rag/audio/documents/labels.json"),
+            ("AUTORAG_TEST_DATA_KEY", "data/rag/audio/sample/documents/labels.json"),
             ("RHOAI_PIPELINE_RUN_TIMEOUT", "0"),
         ):
             with self.subTest(name=name):
@@ -96,16 +96,16 @@ class EnvRunnerTests(unittest.TestCase):
                     client.assert_not_called()
 
     def test_existing_s3_dry_run_needs_no_cluster_or_local_corpus(self):
-        env = {**environment(), "AUTORAG_DATASET_DIR": "samples/missing-local-data"}
+        env = {**environment(), "AUTORAG_INPUT_DATA_KEYS": '["data/missing-local-data/documents"]'}
         with (
             patch.object(runner, "read_env", return_value=env),
             patch.object(runner, "client_for") as client,
-            patch.object(runner, "load_sample") as load_sample,
+            patch.object(runner, "upload_plan") as upload_plan,
             patch.object(runner, "upload") as upload,
         ):
             runner.main(["--dry-run"])
             client.assert_not_called()
-            load_sample.assert_not_called()
+            upload_plan.assert_not_called()
             upload.assert_not_called()
 
     def test_token_auth_does_not_require_oc(self):
@@ -260,21 +260,28 @@ class EnvRunnerTests(unittest.TestCase):
             directory = Path(tmp) / "work/runs/test-run"
             params = read_json(directory / "params.json")
             self.assertEqual(params["collection_name"], "new_collection")
-            self.assertEqual(params["input_data_keys"], ["datasets/rag/audio/documents"])
+            self.assertEqual(params["input_data_keys"], ["data/rag/audio/sample/documents"])
             bound = read_json(directory / "pattern.bound.json")
             self.assertEqual(bound["settings"]["store_binding"]["collection_name"], "new_collection")
             client.create_experiment.assert_not_called()
             upload.assert_not_called()
 
-    def test_upload_mode_cannot_modify_existing_ci_paths_or_separate_buckets(self):
+    def test_upload_mode_reuses_explicit_paths_and_rejects_separate_buckets(self):
         env = {**environment(), "AUTORAG_UPLOAD_TEST_DATASETS": "true"}
-        self.assertNotIn("input_data_keys", runner.configuration(env))
-        for extra in (
-            {"AUTORAG_INPUT_DATA_KEYS": '["datasets/rag/audio/documents"]'},
-            {"TEST_DATA_BUCKET_NAME": "different-bucket"},
-        ):
-            with self.subTest(extra=extra), self.assertRaises(ValueError):
-                runner.configuration({**env, **extra})
+        config = runner.configuration(env)
+        plan = runner.upload_plan(config)
+        self.assertEqual(plan[-1]["key"], config["test_data_key"])
+        self.assertTrue(all(item["key"].startswith(config["input_data_keys"][0] + "/") for item in plan[:-1]))
+        rendered = json.loads(plan[-1]["body"])
+        self.assertTrue(
+            all(
+                key.startswith(config["input_data_keys"][0] + "/")
+                for row in rendered
+                for key in row["correct_answer_document_keys"]
+            )
+        )
+        with self.assertRaises(ValueError):
+            runner.configuration({**env, "TEST_DATA_BUCKET_NAME": "different-bucket"})
 
     def test_local_upload_stages_only_audio_and_benchmark_before_submission(self):
         env = {**environment(), "AUTORAG_UPLOAD_TEST_DATASETS": "true"}
@@ -289,11 +296,57 @@ class EnvRunnerTests(unittest.TestCase):
                 runner.main([])
             plan = upload.call_args.args[2]
             self.assertEqual(len(plan), 4)
-            self.assertEqual(sum("/audio/" in item["key"] for item in plan), 3)
+            self.assertEqual(
+                sum(item["key"].startswith("data/rag/audio/sample/documents/") for item in plan), 3
+            )
             self.assertEqual(sum(item["key"].endswith("/benchmark.json") for item in plan), 1)
             params = client.run_pipeline.call_args.kwargs["params"]
-            self.assertEqual(params["input_data_keys"], ["autorag-audio/sample-v1/audio/"])
-            self.assertEqual(params["test_data_key"], "autorag-audio/sample-v1/benchmark.json")
+            self.assertEqual(params["input_data_keys"], ["data/rag/audio/sample/documents"])
+            self.assertEqual(params["test_data_key"], "data/rag/audio/sample/benchmark.json")
+
+    def test_one_command_accepts_user_audio_and_benchmark_without_preparation(self):
+        with (
+            tempfile.TemporaryDirectory(dir=ROOT / "data/rag/audio/users") as corpus,
+            tempfile.TemporaryDirectory() as records,
+        ):
+            directory = Path(corpus)
+            (directory / "documents").mkdir()
+            (directory / "documents/meeting.mp3").write_bytes(b"recording bytes")
+            write_json(
+                directory / "benchmark.json",
+                [
+                    {
+                        "question": "When is the meeting?",
+                        "correct_answers": ["10 AM"],
+                        "correct_answer_document_keys": ["documents/meeting.mp3"],
+                    }
+                ],
+            )
+            before = {path.relative_to(directory) for path in directory.rglob("*")}
+            env = {
+                **environment(),
+                "AUTORAG_UPLOAD_TEST_DATASETS": "true",
+                "AUTORAG_INPUT_DATA_KEYS": json.dumps([str(directory.relative_to(ROOT) / "documents")]),
+                "AUTORAG_TEST_DATA_KEY": str(directory.relative_to(ROOT) / "benchmark.json"),
+            }
+            client = mock_client()
+            with (
+                patch.object(runner, "ROOT", Path(records)),
+                patch.object(runner, "read_env", return_value=env),
+                patch.object(runner, "client_for", return_value=(client, "https://pipeline.example.test")),
+                patch.object(runner, "upload") as upload,
+            ):
+                runner.main([])
+            plan = upload.call_args.args[2]
+            self.assertEqual(
+                [item["key"] for item in plan],
+                [
+                    str(directory.relative_to(ROOT) / "documents/meeting.mp3"),
+                    str(directory.relative_to(ROOT) / "benchmark.json"),
+                ],
+            )
+            self.assertEqual(before, {path.relative_to(directory) for path in directory.rglob("*")})
+            client.run_pipeline.assert_called_once()
 
     def test_upload_dry_run_validates_corpus_without_writes_or_requests(self):
         env = {**environment(), "AUTORAG_UPLOAD_TEST_DATASETS": "true"}

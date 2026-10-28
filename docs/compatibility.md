@@ -15,7 +15,7 @@ or substitutes for the runner's validation against the full installed version.
 
 Known differences from historical audio benchmarks:
 
-- Use `input_data_keys: ["prefix/audio/"]`; the older singular `input_data_key` is not forwarded.
+- Use `input_data_keys: ["prefix/documents/"]`; the older singular `input_data_key` is not forwarded.
 - Use `maas_secret_name`, `db_secret_name`, `embedding_models` and `generation_models`; do not
   reuse historical `ogx_secret_name` or `vector_io_provider_id` parameters.
 - The sample defaults to `answer_correctness`, matching AutoX CI TC-P-5. Other metrics must be

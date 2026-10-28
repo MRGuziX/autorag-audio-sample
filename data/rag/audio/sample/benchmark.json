@@ -7,7 +7,7 @@
       "trzy tysiące dwieście"
     ],
     "correct_answer_document_keys": [
-      "audio/capybara_story.m4a"
+      "data/rag/audio/sample/documents/capybara_story.m4a"
     ]
   },
   {
@@ -17,7 +17,7 @@
       "czterysta pięćdziesiąt"
     ],
     "correct_answer_document_keys": [
-      "audio/capybara_story.m4a"
+      "data/rag/audio/sample/documents/capybara_story.m4a"
     ]
   },
   {
@@ -28,7 +28,7 @@
       "Chitinos"
     ],
     "correct_answer_document_keys": [
-      "audio/termites_story.wav"
+      "data/rag/audio/sample/documents/termites_story.wav"
     ]
   },
   {
@@ -38,7 +38,7 @@
       "45 m"
     ],
     "correct_answer_document_keys": [
-      "audio/termites_story.wav"
+      "data/rag/audio/sample/documents/termites_story.wav"
     ]
   },
   {
@@ -49,7 +49,7 @@
       "ćwierć miliona"
     ],
     "correct_answer_document_keys": [
-      "audio/termites_story.wav"
+      "data/rag/audio/sample/documents/termites_story.wav"
     ]
   },
   {
@@ -60,7 +60,7 @@
       "dziesięć milionów"
     ],
     "correct_answer_document_keys": [
-      "audio/termites_story.wav"
+      "data/rag/audio/sample/documents/termites_story.wav"
     ]
   },
   {
@@ -70,7 +70,7 @@
       "Szeregowy Barnaba"
     ],
     "correct_answer_document_keys": [
-      "audio/anteater_story.mp3"
+      "data/rag/audio/sample/documents/anteater_story.mp3"
     ]
   },
   {
@@ -81,7 +81,7 @@
       "10 centymetrów"
     ],
     "correct_answer_document_keys": [
-      "audio/anteater_story.mp3"
+      "data/rag/audio/sample/documents/anteater_story.mp3"
     ]
   },
   {
@@ -92,7 +92,7 @@
       "150 razy na minutę"
     ],
     "correct_answer_document_keys": [
-      "audio/anteater_story.mp3"
+      "data/rag/audio/sample/documents/anteater_story.mp3"
     ]
   },
   {
@@ -103,7 +103,7 @@
       "osiem i pół tysiąca"
     ],
     "correct_answer_document_keys": [
-      "audio/anteater_story.mp3"
+      "data/rag/audio/sample/documents/anteater_story.mp3"
     ]
   },
   {
@@ -113,7 +113,7 @@
       "Kapral Stefan"
     ],
     "correct_answer_document_keys": [
-      "audio/anteater_story.mp3"
+      "data/rag/audio/sample/documents/anteater_story.mp3"
     ]
   }
 ]

@@ -10,8 +10,15 @@ uv sync --frozen
 cp -n .env.example .env
 ```
 
-Fill the project, pipeline URL, bucket, Connection secret names and model IDs in `.env`, as described
-in the [README](../README.md). Reuse an existing OpenShift login or put a current bearer token in
+Use the default `AUTORAG_INPUT_DATA_KEYS=["data/rag/audio/sample/documents"]` and
+`AUTORAG_TEST_DATA_KEY=data/rag/audio/sample/benchmark.json` for the bundled files.
+To use your own data, change both paths to your documents directory and benchmark JSON.
+With uploads enabled, those same paths are read locally and used as S3 destinations.
+See the [benchmark example](../data/README.md).
+
+Fill the project, pipeline URL, bucket, Connection secret names, model IDs and workstation S3
+credentials in `.env`, as described in the [README](../README.md). The example already selects
+your local sample directory and enables upload. Reuse an existing OpenShift login or put a current bearer token in
 `RHOAI_TOKEN` with `RHOAI_KFP_URL`. Do not source the file or put credentials into generated JSON.
 
 ```bash
@@ -39,8 +46,12 @@ Core variables use the AutoX CI `.env.rag` names. Audio scenario settings that A
 | `TEST_DATA_SECRET_NAME`, `TEST_DATA_BUCKET_NAME` | Benchmark Connection and bucket; blank inherits input values |
 | `MAAS_SECRET_NAME`, `VECTOR_DB_SECRET_NAME` | Required existing inference and DB Connections |
 | `AUTORAG_EMBEDDING_MODELS`, `AUTORAG_GENERATION_MODELS` | Required JSON arrays or comma-separated MaaS IDs |
-| `AUTORAG_INPUT_DATA_KEYS` | JSON array containing one audio directory; defaults to TC-P-5 |
-| `AUTORAG_TEST_DATA_KEY` | Benchmark key; defaults to TC-P-5 |
+| `AUTORAG_UPLOAD_TEST_DATASETS` | Example sets `true` to upload local inputs; `false` uses existing S3 inputs |
+| `AWS_S3_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION` | Workstation access to the same S3 storage as the input Connection; required for local uploads |
+| `DOWNLOAD_ARTIFACTS` | Example sets `true`: download this run's artifacts after success; absent/`false` skips downloads |
+| `AWS_S3_BUCKET` | Optional artifact bucket override; also accepts `RHOAI_TEST_ARTIFACTS_BUCKET`; blank discovers the run root, then falls back to the input bucket |
+| `AUTORAG_INPUT_DATA_KEYS` | One documents directory; local upload source and S3 destination; defaults to `["data/rag/audio/sample/documents"]` |
+| `AUTORAG_TEST_DATA_KEY` | Benchmark JSON path; local upload source and S3 destination; defaults to `data/rag/audio/sample/benchmark.json` |
 | `AUTORAG_OPTIMIZATION_METRIC` | `answer_correctness` |
 | `AUTORAG_MAX_RAG_PATTERNS` | `4` (supported range 4–10) |
 | `AUTORAG_PRESET` | `speed` or `balanced` |
@@ -61,7 +72,9 @@ To reuse the CI environment directly:
 uv run python scripts/run_experiment.py --env-file /path/to/autox-ci/autox_tests/.env.rag
 ```
 
-Missing scenario variables use TC-P-5 defaults. Unrelated CI settings are not forwarded to KFP;
+When the upload flag is absent, existing S3 objects are used. Set both dataset paths to the CI
+fixture locations when reusing its `.env.rag`. The starter example explicitly enables local uploads.
+Unrelated CI settings are not forwarded to KFP;
 the runner does not provision CI infrastructure, run notebook Jobs or perform CI fixture teardown.
 Explicit shell environment variables override file values; `${...}` interpolation is not used.
 
@@ -93,6 +106,7 @@ The runner creates `work/runs/<run-name>/` automatically. It contains:
 - `receipt.json`: submission state and run ID, written before submission;
 - `package.yaml`: exact local package snapshot, when using a local pipeline;
 - `pattern.bound.json`: indexing collection binding, for indexing runs.
+- `artifacts/`: downloaded S3 outputs when `DOWNLOAD_ARTIFACTS=true`.
 
 These are generated records, not files to configure. They contain no copied bearer token or Secret
 values. Private project/model/bucket names may appear, so review records before sharing.
@@ -104,6 +118,30 @@ After a timeout, interruption or uncertain submission, inspect the receipt and p
 starting another run. The helper never retries a submission automatically. With `AUTORAG_RUN_NAME`
 set, an existing local record blocks that name before connecting. Default names are unique, so a
 second invocation creates another run. A wait timeout does not cancel the first run.
+
+## Download artifacts
+
+Set `DOWNLOAD_ARTIFACTS=true` to download all objects under the completed run's artifact prefix.
+This applies to optimization and indexing runs. The runner discovers the storage root from KFP
+and scopes the prefix to the pipeline name and run ID. If KFP omits the root, set the artifact
+bucket explicitly; otherwise it falls back to the input bucket.
+
+Downloads reuse the AWS endpoint and credentials from `.env`; those credentials need read/list
+access to the artifact bucket as well as any upload permissions for input data. Set
+`AWS_S3_BUCKET` when artifacts are in a different bucket. If the storage service itself is
+different, update the AWS endpoint/credentials before using the download-only command below.
+
+Files are saved beneath `work/runs/<run-name>/artifacts/`, preserving their S3 directories.
+Download status and file count are recorded in the run receipt. A failed download leaves the
+pipeline result intact. Correct storage access and retry without creating another experiment:
+
+```bash
+uv run python scripts/run_experiment.py --download-run <run-name>
+```
+
+This command uses the existing receipt and target. It works even when `DOWNLOAD_ARTIFACTS=false`.
+`--dry-run` makes no artifact requests. Automatic downloads require a successful run; a failed or
+still-running experiment is inspected through the pipeline UI.
 
 ## Indexing and answer checks
 
@@ -119,4 +157,4 @@ bindings in your inference notebook must match this indexing run. Use the produc
 path against the populated collection and check factual accuracy and retrieved audio support
 separately. Full ticket evidence and remaining product checks are in [validation](validation.md).
 
-For local uploads and custom recordings, follow [samples/README.md](../samples/README.md).
+For local uploads and custom recordings, follow [data/README.md](../data/README.md).

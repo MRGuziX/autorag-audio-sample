@@ -4,10 +4,23 @@ Run an audio RAG experiment on OpenShift AI with **one `.env` file and one comma
 The pipeline reads audio from S3, transcribes it with Docling ASR and optimizes RAG patterns.
 After selecting a pattern, use the same `.env` to index the full corpus and ask grounded questions.
 
+## Choose your data
+
+The bundled Polish recordings and benchmark are ready at the default paths:
+
+```dotenv
+AUTORAG_INPUT_DATA_KEYS=["data/rag/audio/sample/documents"]
+AUTORAG_TEST_DATA_KEY=data/rag/audio/sample/benchmark.json
+```
+
+To use your own data, drop recordings into `data/rag/audio/users/documents/`, add
+`data/rag/audio/users/benchmark.json`, then change both paths in `.env` to those locations.
+See the [benchmark example](data/README.md). No preparation command or metadata file is required.
+
 ## Configure once
 
 You need an existing RHOAI project, a ready pipeline server with the managed AutoRAG pipelines,
-S3 data, and project Connections for S3, MaaS and Milvus/PGVector.
+an S3 bucket, and project Connections for S3, MaaS and Milvus/PGVector.
 Install [uv](https://docs.astral.sh/uv/) and the OpenShift CLI (`oc`) if using your current login.
 
 ```bash
@@ -21,26 +34,23 @@ Fill in `.env`:
 | --- | --- |
 | `RHOAI_PROJECT_NAME` | Your RHOAI project |
 | `RHOAI_KFP_URL` | That project's pipeline API URL; leave blank to discover it using `oc` |
-| `INPUT_DATA_BUCKET_NAME` | Bucket containing the recordings |
+| `INPUT_DATA_BUCKET_NAME` | Bucket to upload the recordings into |
 | `INPUT_DATA_SECRET_NAME` | Project's S3 Connection secret name |
 | `MAAS_SECRET_NAME` | Project's MaaS Connection secret name |
 | `VECTOR_DB_SECRET_NAME` | Project's Milvus/PGVector Connection secret name |
 | `AUTORAG_EMBEDDING_MODELS` | MaaS embedding model IDs, as a JSON array or comma-separated list |
 | `AUTORAG_GENERATION_MODELS` | MaaS generation model IDs, in the same format |
+| `AWS_S3_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Workstation access to the same S3 service, or use your AWS credential chain |
 
 For authentication, use `oc login` in your terminal, or fill `RHOAI_TOKEN` and `RHOAI_KFP_URL` in `.env`.
 No need to source the file. It is ignored by Git. Names follow AutoX CI's `.env.rag`; the runner also
 accepts `--env-file /path/to/.env.rag`. Explicit shell variables override file values.
 
-The default audio scenario matches **TC-P-5**:
-
-- Audio directory: `datasets/rag/audio/documents`
-- Benchmark: `datasets/rag/audio/benchmark_data.json`
-- Metric: `answer_correctness`; maximum patterns: `4`; preset: `speed`
-
-Change the two S3 paths in `.env` to use another existing dataset. The benchmark's source keys must
-point at those recordings. CI may remove its fixtures, so the configured objects must still exist.
-Existing data is used as supplied; the runner does not upload or delete it.
+The example enables `AUTORAG_UPLOAD_TEST_DATASETS=true`: the runner reads the two dataset paths
+locally and uploads to those same keys in S3. Set it to `false` to use objects already in S3.
+Change `AUTORAG_INPUT_DATA_KEYS` and `AUTORAG_TEST_DATA_KEY` to switch datasets in either mode.
+Metric `answer_correctness`, four patterns and preset `speed` match TC-P-5.
+Use fresh paths when replacing uploaded data; conflicting objects are refused.
 
 ## Run
 
@@ -58,13 +68,25 @@ resolve from the `.env` file's directory. A missing or invalid filled path is an
 uv run python scripts/run_experiment.py
 ```
 
-The command validates your selected pipeline, creates or reuses `autorag-audio-sample`, submits a
-uniquely named run and waits for it. Managed mode discovers and pins an installed version. Local
+The command reads and uploads your audio and benchmark, validates the selected pipeline, then
+creates or reuses the `autorag-audio-sample` experiment. It submits a uniquely named run and waits
+for it. Managed mode discovers and pins an installed version. Local
 mode submits an exact snapshot of your YAML, including Kubernetes platform settings, without
 replacing the managed pipeline. Execution takes place on OpenShift in both modes.
 **You don't create or edit JSON configuration files.** Parameters, full pipeline spec, selected IDs
 and the run receipt are saved automatically under `work/runs/<run-name>/` for troubleshooting.
 Tokens and Connection credentials are not saved there.
+
+With `DOWNLOAD_ARTIFACTS=true` (enabled in `.env.example`), a successful run also downloads its
+S3 artifacts to `work/runs/<run-name>/artifacts/`. It uses the AWS endpoint and credentials in
+`.env`. The artifact bucket is discovered from the run; set `AWS_S3_BUCKET` if needed.
+If KFP omits the storage root, the input bucket is the fallback. Only this run's objects are downloaded.
+
+To retry a download without submitting another experiment:
+
+```bash
+uv run python scripts/run_experiment.py --download-run <run-name>
+```
 
 To check `.env` without connecting or submitting:
 
@@ -108,24 +130,23 @@ For the original Polish corpus, try:
 > Na jakiej głębokości pod powierzchnią ziemi znajdował się tron Imperatora termitów?
 
 Expected fact: **45 metrów**, supported by `termites_story.wav`. This is a reference answer,
-not an observed result. Verify the retrieved source/excerpt against the recording, then evaluate
-the separate questions in `data/holdout.json` after fixing the pattern.
+not an observed result. Verify the retrieved source/excerpt against the recording.
 
 ## More options
 
 - [Environment settings and run details](docs/run-on-openshift.md)
-- [Use your own recordings or upload the bundled corpus](samples/README.md)
+- [Use your own recordings or upload the bundled corpus](data/README.md)
 - [Prerequisites and ASR packaging](docs/prerequisites.md)
 - [Compatibility](docs/compatibility.md), [troubleshooting](docs/troubleshooting.md), [acceptance checklist](docs/validation.md)
 
 The only configuration file is `.env`. Shared implementation lives in `scripts/lib/`.
-Optional commands prepare your own corpus, validate local data and collect answer evidence.
+Optional answer evidence is collected with `scripts/collect_evidence.py` after the run.
 
-This private sample includes three Polish recordings, an 11-question benchmark and three draft
-held-out questions. A successful sample pipeline run and grounded answer remain to be recorded.
+This private sample includes three Polish recordings and an 11-question benchmark.
+A successful sample pipeline run and grounded answer remain to be recorded.
 Public corpus redistribution clearance and listening review remain pending. Original M4A support
-depends on the installed product image; the WAV derivative is not evidence of M4A support.
-Helper code is Apache-2.0; corpus rights are separate. See [NOTICE](NOTICE) and [data provenance](data/README.md).
+depends on the installed product image.
+Helper code is Apache-2.0; corpus rights are separate. See [NOTICE](NOTICE) and [data provenance](data/rag/audio/sample/README.md).
 
 ## Local checks
 
@@ -134,6 +155,4 @@ uv sync --frozen --dev
 uv run ruff check .
 uv run ruff format --check .
 uv run python -m unittest discover -s tests
-uv run python scripts/validate_sample.py --profile wav-mp3
-uv run python scripts/validate_sample.py --profile original-three
 ```

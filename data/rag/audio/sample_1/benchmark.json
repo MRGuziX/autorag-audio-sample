@@ -1,0 +1,205 @@
+[
+  {
+    "question": "What kind of animal did Billy keep as a pet?",
+    "correct_answers": [
+      "A goat",
+      "A pet goat",
+      "goat"
+    ],
+    "correct_answer_document_keys": [
+      "data/rag/audio/sample_1/documents/story_10.mp3"
+    ]
+  },
+  {
+    "question": "What did Billy joke that he needed to invest in after his goat took up ballet?",
+    "correct_answers": [
+      "Pointe shoes",
+      "Ballet pointe shoes"
+    ],
+    "correct_answer_document_keys": [
+      "data/rag/audio/sample_1/documents/story_10.mp3"
+    ]
+  },
+  {
+    "question": "According to the narrator, what does standing on their toes help goats do?",
+    "correct_answers": [
+      "Survey their surroundings and spot potential dangers",
+      "Look around their surroundings and identify possible dangers"
+    ],
+    "correct_answer_document_keys": [
+      "data/rag/audio/sample_1/documents/story_10.mp3"
+    ]
+  },
+  {
+    "question": "What was Billy doing when he noticed his goat standing on her tiptoes?",
+    "correct_answers": [
+      "Cleaning out the barn",
+      "He was cleaning the barn"
+    ],
+    "correct_answer_document_keys": [
+      "data/rag/audio/sample_1/documents/story_10.mp3"
+    ]
+  },
+  {
+    "question": "What did Billy's goat say she was practicing when he asked why she was standing on her tiptoes?",
+    "correct_answers": [
+      "Her ballet moves",
+      "Ballet dancing"
+    ],
+    "correct_answer_document_keys": [
+      "data/rag/audio/sample_1/documents/story_10.mp3"
+    ]
+  },
+  {
+    "question": "What inspired Billy's goat to try ballet?",
+    "correct_answers": [
+      "She saw a video of humans dancing",
+      "A video showing humans dancing ballet"
+    ],
+    "correct_answer_document_keys": [
+      "data/rag/audio/sample_1/documents/story_10.mp3"
+    ]
+  },
+  {
+    "question": "What happened to Billy's internet post about his goat taking up ballet?",
+    "correct_answers": [
+      "It went viral",
+      "The post became an internet sensation"
+    ],
+    "correct_answer_document_keys": [
+      "data/rag/audio/sample_1/documents/story_10.mp3"
+    ]
+  },
+  {
+    "question": "In which city did Marco, Lucia, Raphael, and Juliana go on their historical adventure?",
+    "correct_answers": [
+      "Rome"
+    ],
+    "correct_answer_document_keys": [
+      "data/rag/audio/sample_1/documents/story_100.mp3"
+    ]
+  },
+  {
+    "question": "Which famous ancient structure did the four friends originally set out to visit in Rome?",
+    "correct_answers": [
+      "The Colosseum",
+      "Colosseum"
+    ],
+    "correct_answer_document_keys": [
+      "data/rag/audio/sample_1/documents/story_100.mp3"
+    ]
+  },
+  {
+    "question": "Which stone archway did the friends notice near the Colosseum?",
+    "correct_answers": [
+      "The Arch of Constantine",
+      "Arch of Constantine"
+    ],
+    "correct_answer_document_keys": [
+      "data/rag/audio/sample_1/documents/story_100.mp3"
+    ]
+  },
+  {
+    "question": "According to the explanation in the Rome story, why were triumphal arches built?",
+    "correct_answers": [
+      "To celebrate victories in battles",
+      "To commemorate military victories"
+    ],
+    "correct_answer_document_keys": [
+      "data/rag/audio/sample_1/documents/story_100.mp3"
+    ]
+  },
+  {
+    "question": "Which two other sites did the friends discover while exploring near the Colosseum?",
+    "correct_answers": [
+      "The Roman Forum and Palatine Hill",
+      "Palatine Hill and the Roman Forum"
+    ],
+    "correct_answer_document_keys": [
+      "data/rag/audio/sample_1/documents/story_100.mp3"
+    ]
+  },
+  {
+    "question": "What material were the statue fragments Lucia found at the Roman Forum made of?",
+    "correct_answers": [
+      "Marble",
+      "They were pieces of marble statues"
+    ],
+    "correct_answer_document_keys": [
+      "data/rag/audio/sample_1/documents/story_100.mp3"
+    ]
+  },
+  {
+    "question": "What did the friends' adventure in Rome teach them about historical sites?",
+    "correct_answers": [
+      "They should be respected and preserved for future generations to enjoy and learn from",
+      "The importance of respecting and preserving historical sites for future generations"
+    ],
+    "correct_answer_document_keys": [
+      "data/rag/audio/sample_1/documents/story_100.mp3"
+    ]
+  },
+  {
+    "question": "What type of flower were Timmy and Trevor counting in their bouquets?",
+    "correct_answers": [
+      "Carnations"
+    ],
+    "correct_answer_document_keys": [
+      "data/rag/audio/sample_1/documents/story_1015.mp3"
+    ]
+  },
+  {
+    "question": "How many carnations were in Timmy and Trevor's first bouquet before the delivery?",
+    "correct_answers": [
+      "9",
+      "Nine",
+      "Nine carnations"
+    ],
+    "correct_answer_document_keys": [
+      "data/rag/audio/sample_1/documents/story_1015.mp3"
+    ]
+  },
+  {
+    "question": "What was the total number of carnations in the three bouquets before the squirrels appeared?",
+    "correct_answers": [
+      "36",
+      "Thirty-six",
+      "36 carnations"
+    ],
+    "correct_answer_document_keys": [
+      "data/rag/audio/sample_1/documents/story_1015.mp3"
+    ]
+  },
+  {
+    "question": "What average number of carnations per bouquet did Trevor calculate before the squirrels appeared?",
+    "correct_answers": [
+      "12",
+      "Twelve",
+      "12 carnations per bouquet"
+    ],
+    "correct_answer_document_keys": [
+      "data/rag/audio/sample_1/documents/story_1015.mp3"
+    ]
+  },
+  {
+    "question": "Which animals stole carnations from Timmy and Trevor's last bouquet?",
+    "correct_answers": [
+      "Squirrels",
+      "Mischievous squirrels"
+    ],
+    "correct_answer_document_keys": [
+      "data/rag/audio/sample_1/documents/story_1015.mp3"
+    ]
+  },
+  {
+    "question": "According to the story, how many carnations remained in the last bouquet after the squirrels stole some?",
+    "correct_answers": [
+      "10",
+      "Ten",
+      "10 carnations"
+    ],
+    "correct_answer_document_keys": [
+      "data/rag/audio/sample_1/documents/story_1015.mp3"
+    ]
+  }
+]

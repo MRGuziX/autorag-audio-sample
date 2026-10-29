@@ -67,7 +67,7 @@ class LocalPipelineTests(unittest.TestCase):
             ):
                 runner.main([])
             directory = root / "work/runs/test-run"
-            snapshot = directory / "package.yaml"
+            snapshot = directory / "pipeline.yaml"
             self.assertEqual(snapshot.read_bytes(), content)
             self.assertEqual(read_json(directory / "spec.json"), spec)
             client.list_pipelines.assert_not_called()

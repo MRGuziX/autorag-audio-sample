@@ -256,7 +256,7 @@ def main(argv=None):
     print(f"Run records (generated automatically): {directory}")
     package_path = None
     if local_path:
-        package_path = directory / "package.yaml"
+        package_path = directory / "pipeline.yaml"
         package_path.write_bytes(package_content)
         pinned = {
             "source": "local",

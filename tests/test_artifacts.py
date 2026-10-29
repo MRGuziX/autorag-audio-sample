@@ -1,5 +1,7 @@
 """Run-scoped downloads, local path handling and download-only recovery."""
 
+import io
+import json
 import sys
 import tempfile
 import unittest
@@ -11,13 +13,122 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import run_experiment as runner  # noqa: E402
-from lib.artifacts import artifact_location, download_objects, download_run_artifacts  # noqa: E402
+from lib.artifacts import (  # noqa: E402
+    artifact_location,
+    download_objects,
+    download_run_artifacts,
+    select_best_pattern,
+)
 from lib.sample import read_json, write_json  # noqa: E402
 from lib.storage import s3_client  # noqa: E402
 from test_env_runner import environment, mock_client  # noqa: E402
 
 
 class ArtifactTests(unittest.TestCase):
+    def scored_storage(self, scores):
+        storage = Mock()
+        objects = {}
+        for name, score in scores.items():
+            key = f"pipeline/run-id/task/rag_patterns/{name}/pattern.json"
+            objects[key] = json.dumps(
+                {
+                    "name": name,
+                    "evaluation": {
+                        "metrics": [
+                            {
+                                "name": "answer_correctness",
+                                "evaluator": "unitxt",
+                                "optimization_metric": True,
+                                "scores": {"mean": score},
+                            },
+                            {"name": "faithfulness", "evaluator": "unitxt", "scores": {"mean": 1.0}},
+                        ]
+                    },
+                }
+            ).encode()
+            objects[key.replace("pattern.json", "inference.ipynb")] = b"notebook"
+        objects["pipeline/run-id/task/starter_kit/starter_kit.zip"] = b"product zip"
+        objects["pipeline/run-id/task/executor-logs"] = b"logs"
+        storage.get_object.side_effect = lambda **kw: {"Body": io.BytesIO(objects[kw["Key"]])}
+        storage.get_paginator.return_value.paginate.return_value = [
+            {"Contents": [{"Key": key} for key in objects]}
+        ]
+        storage.download_file.side_effect = lambda bucket, key, path: Path(path).write_bytes(objects[key])
+        return storage, objects
+
+    def test_best_pattern_uses_optimization_metric_with_stable_ties(self):
+        storage, objects = self.scored_storage({"Pattern3": 0.9, "Pattern2": 0.9, "Pattern1": 0.4})
+        best = select_best_pattern(storage, "bucket", list(objects), "answer_correctness")
+        self.assertEqual(best["name"], "Pattern2")
+        self.assertEqual(best["score"], 0.9)
+        self.assertEqual([row["name"] for row in best["rankings"]], ["Pattern2", "Pattern3", "Pattern1"])
+
+    def test_missing_scores_are_skipped_and_unrankable_run_fails(self):
+        storage, objects = self.scored_storage({"Pattern1": None, "Pattern2": 0.0, "Pattern3": float("nan")})
+        self.assertEqual(
+            select_best_pattern(storage, "bucket", list(objects), "answer_correctness")["name"], "Pattern2"
+        )
+        with self.assertRaisesRegex(ValueError, "No patterns"):
+            select_best_pattern(storage, "bucket", list(objects), "unavailable_metric")
+        with self.assertRaisesRegex(ValueError, "starter_kit.zip"):
+            select_best_pattern(
+                storage, "bucket", [key for key in objects if not key.endswith(".zip")], "answer_correctness"
+            )
+
+    def test_evaluator_collision_requires_unambiguous_metric(self):
+        storage = Mock()
+        payload = {
+            "evaluation": {
+                "metrics": [
+                    {"name": "faithfulness", "evaluator": "unitxt", "scores": {"mean": 0.2}},
+                    {"name": "faithfulness", "evaluator": "ragas", "scores": {"mean": 0.8}},
+                ]
+            }
+        }
+        storage.get_object.side_effect = lambda **kw: {"Body": io.BytesIO(json.dumps(payload).encode())}
+        keys = ["pipeline/run/rag_patterns/Pattern1/pattern.json", "pipeline/run/starter_kit.zip"]
+        with self.assertRaisesRegex(ValueError, "Ambiguous"):
+            select_best_pattern(storage, "bucket", keys, "faithfulness")
+        best = select_best_pattern(storage, "bucket", keys, "ragas:faithfulness")
+        self.assertEqual(best["evaluator"], "ragas")
+        self.assertEqual(best["score"], 0.8)
+
+    def test_optimization_downloads_only_winning_pattern_and_product_zip(self):
+        storage, _ = self.scored_storage({"Pattern1": 0.2, "Pattern2": 0.8})
+        client = Mock()
+        client.get_run.return_value = SimpleNamespace(runtime_config=None, pipeline_spec={})
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            write_json(
+                directory / "receipt.json",
+                {
+                    "state": "SUCCEEDED",
+                    "kind": "optimization",
+                    "run_id": "run-id",
+                    "pipeline_name": "pipeline",
+                },
+            )
+            write_json(directory / "params.json", {"optimization_metric": "answer_correctness"})
+            with patch("lib.artifacts.s3_client", return_value=storage):
+                download_run_artifacts(
+                    client,
+                    {"INPUT_DATA_BUCKET_NAME": "bucket", "AUTORAG_OPTIMIZATION_METRIC": "faithfulness"},
+                    directory,
+                )
+            downloaded = {
+                str(path.relative_to(directory / "artifacts"))
+                for path in (directory / "artifacts").rglob("*")
+                if path.is_file()
+            }
+            self.assertEqual(
+                downloaded, {"best-pattern/pattern.json", "best-pattern/inference.ipynb", "starter_kit.zip"}
+            )
+            self.assertEqual(read_json(directory / "artifacts/best-pattern/pattern.json")["name"], "Pattern2")
+            receipt = read_json(directory / "receipt.json")
+            self.assertEqual(receipt["artifact_download"]["best_pattern"]["score"], 0.8)
+            self.assertEqual(receipt["artifact_download"]["files"], 3)
+        self.assertTrue(all("Pattern1" not in call.args[1] for call in storage.download_file.call_args_list))
+
     def test_run_root_and_optional_bucket_override(self):
         run = SimpleNamespace(runtime_config=SimpleNamespace(pipeline_root="s3://outputs/team"))
         self.assertEqual(

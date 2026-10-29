@@ -8,11 +8,13 @@ planning document remains local to the developer workspace.
 
 Local validation on macOS / Python 3.12:
 
-- 56 offline tests cover TC-P-5 parameters, directory-based datasets, custom corpus paths, upload
+- 60 offline tests cover TC-P-5 parameters, directory-based datasets, custom corpus paths, upload
   isolation, pipeline identity/contract checks, full wrapped-spec comparisons, `.env` precedence,
   token/`oc` authentication, experiment reuse, indexing bindings and human answer evidence.
 - Artifact-download tests cover run-specific S3 prefixes, bucket discovery/overrides, pagination,
   path validation, interrupted transfers, download status and retries without experiment submission.
+- Best-pattern tests cover metric/evaluator selection, stable ties, missing/non-finite scores,
+  missing ZIP detection and downloading only the winning folder plus starter kit.
 - Run receipts preserve uncertain submissions and wait timeouts without retrying the run.
 - Local package tests cover blank/unset managed fallback, invalid-path rejection, exact YAML
   snapshots, separate Kubernetes platform settings, package submission and source provenance.

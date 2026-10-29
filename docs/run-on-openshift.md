@@ -48,7 +48,7 @@ Core variables use the AutoX CI `.env.rag` names. Audio scenario settings that A
 | `AUTORAG_EMBEDDING_MODELS`, `AUTORAG_GENERATION_MODELS` | Required JSON arrays or comma-separated MaaS IDs |
 | `AUTORAG_UPLOAD_TEST_DATASETS` | Example sets `true` to upload local inputs; `false` uses existing S3 inputs |
 | `AWS_S3_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION` | Workstation access to the same S3 storage as the input Connection; required for local uploads |
-| `DOWNLOAD_ARTIFACTS` | Example sets `true`: download this run's artifacts after success; absent/`false` skips downloads |
+| `DOWNLOAD_ARTIFACTS` | Example sets `true`: download the best optimization pattern and starter kit after success; absent/`false` skips downloads |
 | `AWS_S3_BUCKET` | Optional artifact bucket override; also accepts `RHOAI_TEST_ARTIFACTS_BUCKET`; blank discovers the run root, then falls back to the input bucket |
 | `AUTORAG_INPUT_DATA_KEYS` | One documents directory; local upload source and S3 destination; defaults to `["data/rag/audio/sample/documents"]` |
 | `AUTORAG_TEST_DATA_KEY` | Benchmark JSON path; local upload source and S3 destination; defaults to `data/rag/audio/sample/benchmark.json` |
@@ -104,7 +104,7 @@ The runner creates `work/runs/<run-name>/` automatically. It contains:
 - `spec.json`: full selected spec, including Kubernetes platform settings;
 - `target.json`: project, endpoint and source; managed IDs or local path and SHA-256;
 - `receipt.json`: submission state and run ID, written before submission;
-- `package.yaml`: exact local package snapshot, when using a local pipeline;
+- `pipeline.yaml`: exact local pipeline snapshot, when using a local pipeline;
 - `pattern.bound.json`: indexing collection binding, for indexing runs.
 - `artifacts/`: downloaded S3 outputs when `DOWNLOAD_ARTIFACTS=true`.
 
@@ -121,8 +121,15 @@ second invocation creates another run. A wait timeout does not cancel the first 
 
 ## Download artifacts
 
-Set `DOWNLOAD_ARTIFACTS=true` to download all objects under the completed run's artifact prefix.
-This applies to optimization and indexing runs. The runner discovers the storage root from KFP
+Set `DOWNLOAD_ARTIFACTS=true` to download the highest-scoring optimization pattern and the product
+`starter_kit.zip`. The runner reads each pattern's aggregate metric scores from S3, ranks them by
+the mean of the optimization metric saved in `params.json`, and downloads only the winning folder
+(including `pattern.json`, notebooks and evaluation files) plus the ZIP. It checks evaluator names
+for qualified metrics; ties are resolved by pattern name. Missing/non-finite scores are excluded;
+no usable score or no unique starter kit causes a download error rather than an arbitrary choice.
+
+Outputs are `artifacts/best-pattern/` and `artifacts/starter_kit.zip`. Ranked scores and selection
+are recorded in the receipt. Indexing runs continue to download their run-scoped artifacts. The runner discovers the storage root from KFP
 and scopes the prefix to the pipeline name and run ID. If KFP omits the root, set the artifact
 bucket explicitly; otherwise it falls back to the input bucket.
 
@@ -131,7 +138,8 @@ access to the artifact bucket as well as any upload permissions for input data. 
 `AWS_S3_BUCKET` when artifacts are in a different bucket. If the storage service itself is
 different, update the AWS endpoint/credentials before using the download-only command below.
 
-Files are saved beneath `work/runs/<run-name>/artifacts/`, preserving their S3 directories.
+Files are saved beneath `work/runs/<run-name>/artifacts/`. The selected pattern preserves its internal
+folder structure under `best-pattern/`; the product ZIP is saved as `starter_kit.zip`.
 Download status and file count are recorded in the run receipt. A failed download leaves the
 pipeline result intact. Correct storage access and retry without creating another experiment:
 
@@ -145,7 +153,7 @@ still-running experiment is inspected through the pipeline UI.
 
 ## Indexing and answer checks
 
-Select the optimization pattern by its declared metric, download its `pattern.json`, then set
+With automatic downloads, use `work/runs/<run-name>/artifacts/best-pattern/pattern.json`, then set
 `AUTORAG_PATTERN_FILE` and a fresh `AUTORAG_COLLECTION_NAME` in `.env`:
 
 ```bash

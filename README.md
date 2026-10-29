@@ -77,10 +77,12 @@ replacing the managed pipeline. Execution takes place on OpenShift in both modes
 and the run receipt are saved automatically under `work/runs/<run-name>/` for troubleshooting.
 Tokens and Connection credentials are not saved there.
 
-With `DOWNLOAD_ARTIFACTS=true` (enabled in `.env.example`), a successful run also downloads its
-S3 artifacts to `work/runs/<run-name>/artifacts/`. It uses the AWS endpoint and credentials in
+With `DOWNLOAD_ARTIFACTS=true` (enabled in `.env.example`), a successful optimization run downloads the
+highest-scoring pattern folder and `starter_kit.zip` to `work/runs/<run-name>/artifacts/`. It uses the AWS endpoint and credentials in
 `.env`. The artifact bucket is discovered from the run; set `AWS_S3_BUCKET` if needed.
-If KFP omits the storage root, the input bucket is the fallback. Only this run's objects are downloaded.
+If KFP omits the storage root, the input bucket is the fallback. Pattern selection uses the mean score
+for the run's saved optimization metric. Ties are resolved by pattern name. Other pattern folders
+and logs are skipped; indexing runs retain their run-scoped artifact download behavior.
 
 To retry a download without submitting another experiment:
 
@@ -104,14 +106,15 @@ install an ASR fix in those images.
 
 ## Select a pattern, index and ask
 
-After optimization succeeds, check every recording produced a nonempty transcript. Select a pattern
-by the optimization metric and download its product `pattern.json` and `inference.ipynb`.
-Also retain evaluation results, leaderboard and starter kit when available.
+With downloads enabled, the selected pattern's `pattern.json`, notebooks and evaluation files are
+saved under `work/runs/<run-name>/artifacts/best-pattern/`, with `starter_kit.zip` beside that folder.
+The runner prints the winning name and score and records all ranked scores in the run receipt.
+Check transcript coverage through the pipeline UI; transcript artifacts are not downloaded by this option.
 
 Set these two additional values in the **same `.env`**:
 
 ```dotenv
-AUTORAG_PATTERN_FILE=work/pattern.json
+AUTORAG_PATTERN_FILE=work/runs/<run-name>/artifacts/best-pattern/pattern.json
 AUTORAG_COLLECTION_NAME=audio_sample_001
 ```
 

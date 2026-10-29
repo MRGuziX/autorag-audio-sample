@@ -1,11 +1,13 @@
 """Download only one run's S3 artifacts, preserving the object directory structure."""
 
-from pathlib import Path
+import json
+import math
+from pathlib import Path, PurePosixPath
 from tempfile import NamedTemporaryFile
 from urllib.parse import urlsplit
 
 from lib.pipelines import remote_call
-from lib.sample import read_json, relative_path, require, write_json
+from lib.sample import OPTIMIZATION_PIPELINE, read_json, relative_path, require, write_json
 from lib.storage import s3_client
 
 
@@ -30,30 +32,84 @@ def artifact_location(run, pipeline_name: str, run_id: str, env: dict) -> tuple[
     return bucket, prefix + "/"
 
 
-def download_objects(client, bucket: str, prefix: str, destination: Path) -> int:
-    count = 0
-    destination.mkdir(parents=True, exist_ok=True)
+def object_keys(client, bucket: str, prefix: str) -> list[str]:
+    keys = []
     for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
         for obj in page.get("Contents", []):
             key = obj["Key"]
             require(key.startswith(prefix), "S3 returned an object outside the selected run")
-            if key.endswith("/"):
-                continue
-            suffix = relative_path(key[len(prefix) :])
-            path = destination / suffix
-            require(
-                path.resolve().is_relative_to(destination.resolve()), "Artifact path leaves download folder"
-            )
-            path.parent.mkdir(parents=True, exist_ok=True)
-            # Replace an artifact only after the transfer completes.
-            with NamedTemporaryFile(dir=path.parent, prefix=".download-", delete=False) as stream:
-                temporary = Path(stream.name)
-            try:
-                client.download_file(bucket, key, str(temporary))
-                temporary.replace(path)
-            finally:
-                temporary.unlink(missing_ok=True)
-            count += 1
+            if not key.endswith("/"):
+                relative_path(key[len(prefix) :])
+                keys.append(key)
+    return sorted(set(keys))
+
+
+def select_best_pattern(client, bucket: str, keys: list[str], metric: str) -> dict:
+    evaluator, separator, name = metric.partition(":")
+    if not separator:
+        name, evaluator = metric, None
+    rankings = []
+    for key in keys:
+        if not key.endswith("/pattern.json") or "rag_patterns" not in PurePosixPath(key).parts:
+            continue
+        response = client.get_object(Bucket=bucket, Key=key)
+        with response["Body"] as stream:
+            pattern = json.load(stream)
+        metrics = pattern.get("evaluation", {}).get("metrics", [])
+        matches = [
+            item
+            for item in metrics
+            if item.get("name") == name and (evaluator is None or item.get("evaluator") == evaluator)
+        ]
+        marked = [item for item in matches if item.get("optimization_metric") is True]
+        matches = marked or matches
+        require(len(matches) <= 1, "Ambiguous optimization metric in pattern; specify its evaluator")
+        if not matches:
+            continue
+        result = matches[0]
+        score = result.get("scores", {}).get("mean")
+        if type(score) not in (int, float) or not math.isfinite(score):
+            continue
+        rankings.append(
+            {
+                "name": pattern.get("name") or PurePosixPath(key).parent.name,
+                "score": score,
+                "metric": result["name"],
+                "evaluator": result.get("evaluator"),
+                "pattern_key": key,
+            }
+        )
+    require(bool(rankings), f"No patterns have a finite score for optimization metric {metric}")
+    rankings.sort(key=lambda item: (-item["score"], item["name"], item["pattern_key"]))
+    kits = [key for key in keys if key.endswith("/starter_kit.zip")]
+    require(len(kits) == 1, "Expected one starter_kit.zip for this optimization run")
+    return {**rankings[0], "starter_kit_key": kits[0], "rankings": rankings}
+
+
+def download_objects(
+    client, bucket: str, prefix: str, destination: Path, keys: list[str] | None = None
+) -> int:
+    count = 0
+    destination.mkdir(parents=True, exist_ok=True)
+    if keys is None:
+        keys = object_keys(client, bucket, prefix)
+    for key in keys:
+        require(key.startswith(prefix), "S3 returned an object outside the selected run")
+        if key.endswith("/"):
+            continue
+        suffix = relative_path(key[len(prefix) :])
+        path = destination / suffix
+        require(path.resolve().is_relative_to(destination.resolve()), "Artifact path leaves download folder")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # Replace an artifact only after the transfer completes.
+        with NamedTemporaryFile(dir=path.parent, prefix=".download-", delete=False) as stream:
+            temporary = Path(stream.name)
+        try:
+            client.download_file(bucket, key, str(temporary))
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
+        count += 1
     require(count > 0, "No run artifacts found; check AWS_S3_BUCKET and the run's S3 location")
     return count
 
@@ -70,7 +126,26 @@ def download_run_artifacts(client, env: dict, directory: Path) -> None:
         bucket, prefix = artifact_location(run, receipt["pipeline_name"], run_id, env)
         receipt["artifact_download"].update(bucket=bucket, prefix=prefix)
         write_json(receipt_path, receipt)
-        count = download_objects(s3_client(env), bucket, prefix, destination)
+        storage = s3_client(env)
+        if receipt.get("kind") == "optimization" or receipt["pipeline_name"] == OPTIMIZATION_PIPELINE:
+            keys = object_keys(storage, bucket, prefix)
+            metric = read_json(directory / "params.json")["optimization_metric"]
+            best = select_best_pattern(storage, bucket, keys, metric)
+            receipt["artifact_download"]["best_pattern"] = best
+            write_json(receipt_path, receipt)
+            pattern_prefix = best["pattern_key"].rsplit("/", 1)[0] + "/"
+            selected_keys = [key for key in keys if key.startswith(pattern_prefix)]
+            count = download_objects(
+                storage, bucket, pattern_prefix, destination / "best-pattern", selected_keys
+            )
+            kit_key = best["starter_kit_key"]
+            count += download_objects(
+                storage, bucket, kit_key.rsplit("/", 1)[0] + "/", destination, [kit_key]
+            )
+            print(f"Best pattern: {best['name']}; {best['evaluator']}:{best['metric']}={best['score']}")
+            print(f"Pattern file: {destination / 'best-pattern/pattern.json'}")
+        else:
+            count = download_objects(storage, bucket, prefix, destination)
     except Exception as exc:
         receipt["artifact_download"]["state"] = "FAILED"
         write_json(receipt_path, receipt)

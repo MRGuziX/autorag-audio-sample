@@ -15,6 +15,10 @@ AUTORAG_TEST_DATA_KEY=data/rag/audio/sample/benchmark.json
 
 To use your own data, drop recordings into `data/rag/audio/users/documents/`, add
 `data/rag/audio/users/benchmark.json`, then change both paths in `.env` to those locations.
+An additional English dataset is available at `data/rag/audio/sample_1/`: three MP3 recordings,
+a 20-question `benchmark.json` and local reference transcripts. Set the two paths to
+`data/rag/audio/sample_1/documents` and `data/rag/audio/sample_1/benchmark.json` to use it.
+
 See the [benchmark example](data/README.md). No preparation command or metadata file is required.
 
 ## Configure once
@@ -78,11 +82,14 @@ and the run receipt are saved automatically under `work/runs/<run-name>/` for tr
 Tokens and Connection credentials are not saved there.
 
 With `DOWNLOAD_ARTIFACTS=true` (enabled in `.env.example`), a successful optimization run downloads the
-highest-scoring pattern folder and `starter_kit.zip` to `work/runs/<run-name>/artifacts/`. It uses the AWS endpoint and credentials in
-`.env`. The artifact bucket is discovered from the run; set `AWS_S3_BUCKET` if needed.
+highest-scoring pattern folder, `starter_kit.zip` and the product leaderboard (when available) to
+`work/runs/<run-name>/artifacts/`. It uses the AWS endpoint and credentials in `.env`.
+The artifact bucket is discovered from the run; set `AWS_S3_BUCKET` if needed.
 If KFP omits the storage root, the input bucket is the fallback. Pattern selection uses the mean score
-for the run's saved optimization metric. Ties are resolved by pattern name. Other pattern folders
-and logs are skipped; indexing runs retain their run-scoped artifact download behavior.
+for the run's saved optimization metric and requires comparable evaluator scores. On ties, it
+selects the winning pattern named in the product starter kit so both downloads agree. An
+unrecognized kit or a kit for a lower-scoring pattern produces an actionable download error.
+Other pattern folders and logs are skipped; indexing runs download their run-scoped artifacts.
 
 To retry a download without submitting another experiment:
 
@@ -107,7 +114,9 @@ install an ASR fix in those images.
 ## Select a pattern, index and ask
 
 With downloads enabled, the selected pattern's `pattern.json`, notebooks and evaluation files are
-saved under `work/runs/<run-name>/artifacts/best-pattern/`, with `starter_kit.zip` beside that folder.
+saved under `work/runs/<run-name>/artifacts/best-pattern/`, with `starter_kit.zip` and
+`leaderboard.html` beside that folder. If the product version supplies no leaderboard, the runner
+reports that and keeps the other downloads.
 The runner prints the winning name and score and records all ranked scores in the run receipt.
 Check transcript coverage through the pipeline UI; transcript artifacts are not downloaded by this option.
 
@@ -124,9 +133,25 @@ Use a fresh vector collection, then run:
 uv run python scripts/run_experiment.py --kind indexing
 ```
 
-The runner preserves the selected pattern's model/chunking settings and saves `pattern.bound.json`
-in that run's folder. In the product `inference.ipynb`, set `collection_name` to the same collection,
-configure its MaaS/database access and ask against the managed index.
+The runner preserves the selected pattern's model/chunking settings. Its receipt records the
+pattern hash and target collection; `params.json` records the exact indexing arguments.
+Use the downloaded product `inference.ipynb` for the ask step:
+
+1. Open `artifacts/best-pattern/inference.ipynb` in a RHOAI workbench and run **Setup**.
+2. Attach the MaaS and vector database Connections used by the indexing pipeline. In
+   **Prepare MaaS client**, verify `MAAS_BASE_URL` and `MAAS_API_KEY` are available.
+3. In **Initialize Vector Store Client**, replace the generated `collection_name` with your
+   `AUTORAG_COLLECTION_NAME`. Keep the generated embedding model, dimensions and retrieval settings.
+   The generated collection initially refers to optimization data; use the full-corpus index you
+   just created. Keep the provider-specific database variables listed in that notebook aligned
+   with `VECTOR_DB_SECRET_NAME`.
+4. Run the initialization cells through **Query RAG Pattern**, enter a question and inspect the
+   printed response and retrieved sources. You have already populated the collection with the
+   managed indexing pipeline, so skip the separate `indexing.ipynb` walkthrough.
+
+The downloaded starter kit is also a product output. If using it against the new collection,
+update `vector_store.collection_name` in its `agent_config.json` and configure access according to
+its README. This sample does not deploy it automatically.
 
 For the original Polish corpus, try:
 
@@ -145,7 +170,8 @@ not an observed result. Verify the retrieved source/excerpt against the recordin
 The only configuration file is `.env`. Shared implementation lives in `scripts/lib/`.
 Optional answer evidence is collected with `scripts/collect_evidence.py` after the run.
 
-This private sample includes three Polish recordings and an 11-question benchmark.
+This private sample includes the original Polish corpus (three recordings, 11 questions) and
+an additional English corpus (three recordings, 20 questions).
 A successful sample pipeline run and grounded answer remain to be recorded.
 Public corpus redistribution clearance and listening review remain pending. Original M4A support
 depends on the installed product image.

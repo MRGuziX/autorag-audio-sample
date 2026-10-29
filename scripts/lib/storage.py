@@ -39,9 +39,8 @@ def upload_plan(config: dict) -> list[dict]:
     plan = [
         {
             "key": f["object_key"],
-            "path": local_path(f["path"]),
+            "path": local_path(f["object_key"]),
             "sha256": f["sha256"],
-            "bytes": f["bytes"],
         }
         for f in files
     ]
@@ -50,7 +49,6 @@ def upload_plan(config: dict) -> list[dict]:
             "key": config["test_data_key"],
             "body": benchmark_bytes,
             "sha256": hashlib.sha256(benchmark_bytes).hexdigest(),
-            "bytes": len(benchmark_bytes),
         }
     )
     return plan

@@ -13,6 +13,9 @@ The reference files are automatic Whisper transcripts of the recordings, created
 human listening review. Names and unusual phrases may contain transcription errors. Story claims
 and numerical inconsistencies are retained rather than silently corrected.
 
+Source ownership and public redistribution clearance have not been established. The repository's
+code license does not grant rights to these recordings or their derived text and questions.
+
 Only `documents/` and `benchmark.json` are uploaded by the runner. Reference text stays local.
 
 ```dotenv

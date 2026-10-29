@@ -2,9 +2,11 @@
 
 import json
 import math
+import re
 from pathlib import Path, PurePosixPath
 from tempfile import NamedTemporaryFile
 from urllib.parse import urlsplit
+from zipfile import BadZipFile, ZipFile
 
 from lib.pipelines import remote_call
 from lib.sample import OPTIMIZATION_PIPELINE, read_json, relative_path, require, write_json
@@ -80,10 +82,42 @@ def select_best_pattern(client, bucket: str, keys: list[str], metric: str) -> di
             }
         )
     require(bool(rankings), f"No patterns have a finite score for optimization metric {metric}")
+    require(
+        len({item["evaluator"] for item in rankings}) == 1,
+        "Optimization scores use different evaluators; specify an evaluator-qualified metric",
+    )
     rankings.sort(key=lambda item: (-item["score"], item["name"], item["pattern_key"]))
     kits = [key for key in keys if key.endswith("/starter_kit.zip")]
     require(len(kits) == 1, "Expected one starter_kit.zip for this optimization run")
     return {**rankings[0], "starter_kit_key": kits[0], "rankings": rankings}
+
+
+def match_starter_kit(best: dict, path: Path) -> dict:
+    """Use the product kit's named pattern when several patterns share the best score."""
+    try:
+        with ZipFile(path) as archive:
+            heading = archive.read("starter_kit/README.md").decode("utf-8").splitlines()[0]
+    except (BadZipFile, KeyError, UnicodeError, IndexError):
+        raise ValueError("Cannot identify the pattern in the product starter_kit.zip README") from None
+    match = re.fullmatch(r"# Agentic RAG Starter Kit: `(.+)`", heading.strip())
+    require(match is not None, "Unrecognized product starter-kit README; cannot verify its pattern")
+    candidates = [
+        row for row in best["rankings"] if row["name"] == match[1] and row["score"] == best["score"]
+    ]
+    require(len(candidates) == 1, "Starter kit does not identify a highest-scoring pattern for this metric")
+    return {**best, **candidates[0]}
+
+
+def download_object(client, bucket: str, key: str, path: Path) -> None:
+    """Replace an artifact only after its transfer completes."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with NamedTemporaryFile(dir=path.parent, prefix=".download-", delete=False) as stream:
+        temporary = Path(stream.name)
+    try:
+        client.download_file(bucket, key, str(temporary))
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def download_objects(
@@ -100,15 +134,7 @@ def download_objects(
         suffix = relative_path(key[len(prefix) :])
         path = destination / suffix
         require(path.resolve().is_relative_to(destination.resolve()), "Artifact path leaves download folder")
-        path.parent.mkdir(parents=True, exist_ok=True)
-        # Replace an artifact only after the transfer completes.
-        with NamedTemporaryFile(dir=path.parent, prefix=".download-", delete=False) as stream:
-            temporary = Path(stream.name)
-        try:
-            client.download_file(bucket, key, str(temporary))
-            temporary.replace(path)
-        finally:
-            temporary.unlink(missing_ok=True)
+        download_object(client, bucket, key, path)
         count += 1
     require(count > 0, "No run artifacts found; check AWS_S3_BUCKET and the run's S3 location")
     return count
@@ -131,17 +157,29 @@ def download_run_artifacts(client, env: dict, directory: Path) -> None:
             keys = object_keys(storage, bucket, prefix)
             metric = read_json(directory / "params.json")["optimization_metric"]
             best = select_best_pattern(storage, bucket, keys, metric)
+            download_object(storage, bucket, best["starter_kit_key"], destination / "starter_kit.zip")
+            best = match_starter_kit(best, destination / "starter_kit.zip")
             receipt["artifact_download"]["best_pattern"] = best
             write_json(receipt_path, receipt)
             pattern_prefix = best["pattern_key"].rsplit("/", 1)[0] + "/"
             selected_keys = [key for key in keys if key.startswith(pattern_prefix)]
-            count = download_objects(
+            count = 1 + download_objects(
                 storage, bucket, pattern_prefix, destination / "best-pattern", selected_keys
             )
-            kit_key = best["starter_kit_key"]
-            count += download_objects(
-                storage, bucket, kit_key.rsplit("/", 1)[0] + "/", destination, [kit_key]
-            )
+            task_prefix = best["pattern_key"].rsplit("/rag_patterns/", 1)[0] + "/"
+            leaderboard_keys = [
+                key
+                for key in keys
+                if key.startswith(task_prefix)
+                and PurePosixPath(key[len(task_prefix) :]).parts[0] in {"leaderboard", "leaderboard_html"}
+            ]
+            require(len(leaderboard_keys) <= 1, "Multiple leaderboard files found for the optimization task")
+            if leaderboard_keys:
+                download_object(storage, bucket, leaderboard_keys[0], destination / "leaderboard.html")
+                count += 1
+                receipt["artifact_download"]["leaderboard_key"] = leaderboard_keys[0]
+            else:
+                print("No product leaderboard artifact found; check the run's outputs in the pipeline UI")
             print(f"Best pattern: {best['name']}; {best['evaluator']}:{best['metric']}={best['score']}")
             print(f"Pattern file: {destination / 'best-pattern/pattern.json'}")
         else:

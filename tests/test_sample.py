@@ -128,7 +128,7 @@ class SampleDataTests(unittest.TestCase):
             rendered[0]["correct_answer_document_keys"],
             ["datasets/rag/audio/documents/" + Path(benchmark[0]["correct_answer_document_keys"][0]).name],
         )
-        indexed, _ = prepare(
+        indexed = prepare(
             indexing_pattern(),
             read_json(ROOT / "tests/fixtures/indexing.parameters.json"),
             loaded,
@@ -161,6 +161,14 @@ class SampleDataTests(unittest.TestCase):
                 "data/rag/audio/sample/documents/capybara_story.m4a",
             },
         )
+
+    def test_all_bundled_datasets_have_questions_for_each_recording(self):
+        for dataset in ("sample", "sample_1"):
+            with self.subTest(dataset=dataset):
+                prefix = f"data/rag/audio/{dataset}"
+                files, questions = load_sample(f"{prefix}/documents", f"{prefix}/benchmark.json")
+                sources = {key for row in questions for key in row["correct_answer_document_keys"]}
+                self.assertEqual(sources, {row["object_key"] for row in files})
 
     def test_outside_audio_symlink_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -272,13 +280,11 @@ class UploadTests(unittest.TestCase):
             {
                 "key": "sample/v1/documents/a.wav",
                 "body": b"audio",
-                "bytes": 5,
                 "sha256": hashlib.sha256(b"audio").hexdigest(),
             },
             {
                 "key": "sample/v1/benchmark.json",
                 "body": b"benchmark",
-                "bytes": 9,
                 "sha256": hashlib.sha256(b"benchmark").hexdigest(),
             },
         ]
@@ -337,13 +343,13 @@ class PipelineContractTests(unittest.TestCase):
     def test_indexing_preserves_pattern_and_rebinds_collection(self):
         pattern = indexing_pattern()
         untouched = copy.deepcopy(pattern)
-        params, result = prepare(pattern, self.index_spec, config(), "new_collection")
+        params = prepare(pattern, self.index_spec, config(), "new_collection")
         self.assertEqual(pattern, untouched)
         self.assertNotIn("provider_type", params)
         self.assertEqual(params["chunk_size"], 512)
         self.assertEqual(params["chunk_overlap"], 64)
         self.assertEqual(params["ocr_lang"], "pl")
-        self.assertEqual(result["pattern"]["settings"]["store_binding"]["collection_name"], "new_collection")
+        self.assertEqual(params["collection_name"], "new_collection")
 
     def test_unknown_indexing_fields_and_conflicting_settings_fail(self):
         pattern = indexing_pattern()

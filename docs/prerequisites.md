@@ -31,11 +31,13 @@ Existing audio and benchmark data may use separate buckets and Connections. Leav
 values blank to inherit the input settings. Local uploads require one bucket and Connection for
 both. Secrets contain credentials; the pipeline arguments contain their names only.
 
-Workstation S3 access is needed only when `AUTORAG_UPLOAD_TEST_DATASETS=true`. Fill
+Workstation S3 access is needed when `AUTORAG_UPLOAD_TEST_DATASETS=true` or
+`DOWNLOAD_ARTIFACTS=true`, and for explicit `--download-run` retries. Fill
 `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, optional `AWS_SESSION_TOKEN`, `AWS_S3_ENDPOINT`
 and `AWS_DEFAULT_REGION` in `.env`, or use the workstation's normal boto3 credential chain.
-An exported `AWS_CA_BUNDLE` can supply a custom storage CA. Existing-S3 experiments need no
-workstation S3 credentials because the pipeline reads its project Connections.
+An exported `AWS_CA_BUNDLE` can supply a custom storage CA. Existing-S3 experiments with downloads
+disabled need no workstation S3 credentials because the pipeline reads its project Connections. Downloads require
+read/list access to the artifact bucket; uploads additionally require access to the input bucket.
 
 The normal runner reads `RHOAI_KFP_URL`, optional `RHOAI_TOKEN` and optional `KFP_CA_CERT` from `.env`.
 Without a token it reuses `oc login`; without an endpoint it discovers the project's DSPA route.

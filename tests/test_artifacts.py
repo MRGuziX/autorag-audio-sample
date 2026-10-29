@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
+from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -17,6 +18,7 @@ from lib.artifacts import (  # noqa: E402
     artifact_location,
     download_objects,
     download_run_artifacts,
+    match_starter_kit,
     select_best_pattern,
 )
 from lib.sample import read_json, write_json  # noqa: E402
@@ -24,7 +26,143 @@ from lib.storage import s3_client  # noqa: E402
 from test_env_runner import environment, mock_client  # noqa: E402
 
 
+def product_zip(name):
+    stream = io.BytesIO()
+    with ZipFile(stream, "w") as archive:
+        archive.writestr("starter_kit/README.md", f"# Agentic RAG Starter Kit: `{name}`\n")
+    return stream.getvalue()
+
+
 class ArtifactTests(unittest.TestCase):
+    def test_download_refreshes_timeout_receipt_and_never_resubmits(self):
+        for state in ("SUCCEEDED", "RUNNING", "FAILED"):
+            for legacy in (False, True):
+                with self.subTest(state=state, legacy=legacy), tempfile.TemporaryDirectory() as tmp:
+                    directory = Path(tmp) / "work/runs/timed-out"
+                    receipt = {"state": "PENDING", "run_id": "run-id"}
+                    target = {"namespace": "project", "endpoint": "https://saved-kfp.test"}
+                    if legacy:
+                        write_json(directory / "target.json", target)
+                    else:
+                        receipt.update(target)
+                    write_json(directory / "receipt.json", receipt)
+                    client = Mock()
+                    client.get_run.return_value.state = state
+                    with (
+                        patch.object(runner, "ROOT", Path(tmp)),
+                        patch.object(runner, "read_env", return_value=environment()),
+                        patch.object(
+                            runner, "client_for", return_value=(client, target["endpoint"])
+                        ) as connect,
+                        patch.object(runner, "download_run_artifacts") as download,
+                    ):
+                        if state == "SUCCEEDED":
+                            runner.main(["--download-run", "timed-out"])
+                            download.assert_called_once_with(client, environment(), directory)
+                        else:
+                            with self.assertRaisesRegex(ValueError, f"Run state is {state}"):
+                                runner.main(["--download-run", "timed-out"])
+                            download.assert_not_called()
+                    self.assertEqual(read_json(directory / "receipt.json")["state"], state)
+                    self.assertEqual(connect.call_args.args[1], "project")
+                    self.assertEqual(connect.call_args.args[0]["RHOAI_KFP_URL"], target["endpoint"])
+                    client.run_pipeline.assert_not_called()
+
+    def test_download_without_run_id_does_not_attempt_recovery_or_submission(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp) / "work/runs/uncertain"
+            write_json(directory / "receipt.json", {"state": "SUBMISSION_UNCERTAIN", "run_id": None})
+            with (
+                patch.object(runner, "ROOT", Path(tmp)),
+                patch.object(runner, "read_env", return_value=environment()),
+                patch.object(runner, "client_for") as connect,
+            ):
+                with self.assertRaisesRegex(ValueError, "No run ID"):
+                    runner.main(["--download-run", "uncertain"])
+            connect.assert_not_called()
+
+    def test_starter_kit_selects_a_tied_winner_and_rejects_other_or_invalid_kits(self):
+        storage, objects = self.scored_storage({"Pattern3": 0.9, "Pattern2": 0.9, "Pattern1": 0.4})
+        best = select_best_pattern(storage, "bucket", list(objects), "answer_correctness")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "starter_kit.zip"
+            path.write_bytes(product_zip("Pattern3"))
+            self.assertEqual(match_starter_kit(best, path)["name"], "Pattern3")
+            for name in ("Pattern1", "Unknown"):
+                path.write_bytes(product_zip(name))
+                with self.assertRaisesRegex(ValueError, "highest-scoring"):
+                    match_starter_kit(best, path)
+            path.write_bytes(b"invalid zip")
+            with self.assertRaisesRegex(ValueError, "Cannot identify"):
+                match_starter_kit(best, path)
+
+    def test_scores_from_different_evaluators_are_not_ranked_together(self):
+        storage, objects = self.scored_storage({"Pattern1": 0.4, "Pattern2": 0.8})
+        key = "pipeline/run-id/task/rag_patterns/Pattern2/pattern.json"
+        pattern = json.loads(objects[key])
+        pattern["evaluation"]["metrics"][0]["evaluator"] = "other"
+        objects[key] = json.dumps(pattern).encode()
+        with self.assertRaisesRegex(ValueError, "different evaluators"):
+            select_best_pattern(storage, "bucket", list(objects), "answer_correctness")
+        best = select_best_pattern(storage, "bucket", list(objects), "unitxt:answer_correctness")
+        self.assertEqual(best["name"], "Pattern1")
+
+    def test_download_uses_kit_tie_winner_and_handles_missing_leaderboard(self):
+        for leaderboard in (True, False):
+            with self.subTest(leaderboard=leaderboard), tempfile.TemporaryDirectory() as tmp:
+                directory = Path(tmp)
+                storage, objects = self.scored_storage({"Pattern3": 0.9, "Pattern2": 0.9})
+                if not leaderboard:
+                    objects.pop("pipeline/run-id/task/leaderboard")
+                storage.get_paginator.return_value.paginate.return_value = [
+                    {"Contents": [{"Key": key} for key in objects]}
+                ]
+                write_json(
+                    directory / "receipt.json",
+                    {
+                        "state": "SUCCEEDED",
+                        "kind": "optimization",
+                        "pipeline_name": "pipeline",
+                        "run_id": "run-id",
+                    },
+                )
+                write_json(directory / "params.json", {"optimization_metric": "answer_correctness"})
+                client = Mock()
+                client.get_run.return_value = SimpleNamespace(runtime_config=None, pipeline_spec={})
+                with patch("lib.artifacts.s3_client", return_value=storage):
+                    download_run_artifacts(client, {"INPUT_DATA_BUCKET_NAME": "bucket"}, directory)
+                pattern = read_json(directory / "artifacts/best-pattern/pattern.json")
+                self.assertEqual(pattern["name"], "Pattern3")
+                self.assertEqual((directory / "artifacts/leaderboard.html").exists(), leaderboard)
+                receipt = read_json(directory / "receipt.json")
+                self.assertEqual(receipt["artifact_download"]["state"], "SUCCEEDED")
+                self.assertEqual(receipt["artifact_download"]["best_pattern"]["name"], pattern["name"])
+
+    def test_mismatched_kit_fails_download_without_changing_pipeline_success(self):
+        storage, objects = self.scored_storage({"Pattern1": 0.2, "Pattern2": 0.8})
+        objects["pipeline/run-id/task/starter_kit/starter_kit.zip"] = product_zip("Pattern1")
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            write_json(
+                directory / "receipt.json",
+                {
+                    "state": "SUCCEEDED",
+                    "kind": "optimization",
+                    "pipeline_name": "pipeline",
+                    "run_id": "run-id",
+                },
+            )
+            write_json(directory / "params.json", {"optimization_metric": "answer_correctness"})
+            client = Mock()
+            client.get_run.return_value = SimpleNamespace(runtime_config=None, pipeline_spec={})
+            with patch("lib.artifacts.s3_client", return_value=storage):
+                with self.assertRaisesRegex(RuntimeError, "highest-scoring"):
+                    download_run_artifacts(client, {"INPUT_DATA_BUCKET_NAME": "bucket"}, directory)
+            receipt = read_json(directory / "receipt.json")
+            self.assertEqual(receipt["state"], "SUCCEEDED")
+            self.assertEqual(receipt["artifact_download"]["state"], "FAILED")
+            self.assertFalse((directory / "artifacts/best-pattern").exists())
+
     def scored_storage(self, scores):
         storage = Mock()
         objects = {}
@@ -47,7 +185,13 @@ class ArtifactTests(unittest.TestCase):
                 }
             ).encode()
             objects[key.replace("pattern.json", "inference.ipynb")] = b"notebook"
-        objects["pipeline/run-id/task/starter_kit/starter_kit.zip"] = b"product zip"
+        winner = max(
+            (name for name, score in scores.items() if score is not None and score == score),
+            key=lambda name: scores[name],
+            default="Pattern1",
+        )
+        objects["pipeline/run-id/task/starter_kit/starter_kit.zip"] = product_zip(winner)
+        objects["pipeline/run-id/task/leaderboard"] = b"<html>Product leaderboard</html>"
         objects["pipeline/run-id/task/executor-logs"] = b"logs"
         storage.get_object.side_effect = lambda **kw: {"Body": io.BytesIO(objects[kw["Key"]])}
         storage.get_paginator.return_value.paginate.return_value = [
@@ -96,7 +240,9 @@ class ArtifactTests(unittest.TestCase):
     def test_optimization_downloads_only_winning_pattern_and_product_zip(self):
         storage, _ = self.scored_storage({"Pattern1": 0.2, "Pattern2": 0.8})
         client = Mock()
-        client.get_run.return_value = SimpleNamespace(runtime_config=None, pipeline_spec={})
+        client.get_run.return_value = SimpleNamespace(
+            state="SUCCEEDED", runtime_config=None, pipeline_spec={}
+        )
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
             write_json(
@@ -121,12 +267,18 @@ class ArtifactTests(unittest.TestCase):
                 if path.is_file()
             }
             self.assertEqual(
-                downloaded, {"best-pattern/pattern.json", "best-pattern/inference.ipynb", "starter_kit.zip"}
+                downloaded,
+                {
+                    "best-pattern/pattern.json",
+                    "best-pattern/inference.ipynb",
+                    "starter_kit.zip",
+                    "leaderboard.html",
+                },
             )
             self.assertEqual(read_json(directory / "artifacts/best-pattern/pattern.json")["name"], "Pattern2")
             receipt = read_json(directory / "receipt.json")
             self.assertEqual(receipt["artifact_download"]["best_pattern"]["score"], 0.8)
-            self.assertEqual(receipt["artifact_download"]["files"], 3)
+            self.assertEqual(receipt["artifact_download"]["files"], 4)
         self.assertTrue(all("Pattern1" not in call.args[1] for call in storage.download_file.call_args_list))
 
     def test_run_root_and_optional_bucket_override(self):
@@ -148,7 +300,7 @@ class ArtifactTests(unittest.TestCase):
                 )
 
     def test_missing_root_uses_configured_artifact_bucket_or_input_bucket(self):
-        run = SimpleNamespace(runtime_config=None, pipeline_spec={})
+        run = SimpleNamespace(state="SUCCEEDED", runtime_config=None, pipeline_spec={})
         for env, bucket in (
             ({"AWS_S3_BUCKET": "artifacts"}, "artifacts"),
             ({"RHOAI_TEST_ARTIFACTS_BUCKET": "ci-artifacts"}, "ci-artifacts"),
@@ -225,7 +377,9 @@ class ArtifactTests(unittest.TestCase):
             )
             write_json(directory / "target.json", {"namespace": "project", "endpoint": "https://kfp.test"})
             client = Mock()
-            client.get_run.return_value = SimpleNamespace(runtime_config=None, pipeline_spec={})
+            client.get_run.return_value = SimpleNamespace(
+                state="SUCCEEDED", runtime_config=None, pipeline_spec={}
+            )
             with (
                 patch("lib.artifacts.s3_client"),
                 patch("lib.artifacts.download_objects", side_effect=OSError),

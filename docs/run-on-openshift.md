@@ -102,34 +102,42 @@ The runner creates `work/runs/<run-name>/` automatically. It contains:
 
 - `params.json`: actual pipeline arguments;
 - `spec.json`: full selected spec, including Kubernetes platform settings;
-- `target.json`: project, endpoint and source; managed IDs or local path and SHA-256;
-- `receipt.json`: submission state and run ID, written before submission;
+- `receipt.json`: project, endpoint, source, submission state and run ID, written before submission;
 - `pipeline.yaml`: exact local pipeline snapshot, when using a local pipeline;
-- `pattern.bound.json`: indexing collection binding, for indexing runs.
 - `artifacts/`: downloaded S3 outputs when `DOWNLOAD_ARTIFACTS=true`.
 
 These are generated records, not files to configure. They contain no copied bearer token or Secret
 values. Private project/model/bucket names may appear, so review records before sharing.
 Local package receipts record source path and SHA-256 in place of managed IDs, which are null.
+Indexing receipts also record the selected pattern SHA-256 and target collection.
 The evidence helper retains this source information. The full submitted package is preserved as
 supplied, so review any values embedded in your own YAML before sharing run records.
 
 After a timeout, interruption or uncertain submission, inspect the receipt and pipeline UI before
 starting another run. The helper never retries a submission automatically. With `AUTORAG_RUN_NAME`
 set, an existing local record blocks that name before connecting. Default names are unique, so a
-second invocation creates another run. A wait timeout does not cancel the first run.
+second invocation creates another run. A wait timeout does not cancel the first run. Authentication,
+discovery and upload failures occur before the run directory is reserved, so they do not consume
+a fixed run name.
 
 ## Download artifacts
 
 Set `DOWNLOAD_ARTIFACTS=true` to download the highest-scoring optimization pattern and the product
-`starter_kit.zip`. The runner reads each pattern's aggregate metric scores from S3, ranks them by
+`starter_kit.zip`, plus `leaderboard.html` when the product supplies it. The runner reads each
+pattern's aggregate metric scores from S3, ranks them by
 the mean of the optimization metric saved in `params.json`, and downloads only the winning folder
 (including `pattern.json`, notebooks and evaluation files) plus the ZIP. It checks evaluator names
-for qualified metrics; ties are resolved by pattern name. Missing/non-finite scores are excluded;
+for qualified metrics and rejects comparisons across different evaluators. For tied best scores,
+it uses the pattern named in the product starter-kit README. A kit identifying a lower-scoring or
+unknown pattern, or an unrecognized README format, causes a download error. Missing/non-finite
+scores are excluded;
 no usable score or no unique starter kit causes a download error rather than an arbitrary choice.
 
-Outputs are `artifacts/best-pattern/` and `artifacts/starter_kit.zip`. Ranked scores and selection
-are recorded in the receipt. Indexing runs continue to download their run-scoped artifacts. The runner discovers the storage root from KFP
+Outputs are `artifacts/best-pattern/`, `artifacts/starter_kit.zip` and `artifacts/leaderboard.html`.
+A missing leaderboard is reported without failing the other downloads; check the optimization
+task's output artifacts in the pipeline UI for product versions with different layouts. Ranked
+scores and selection are recorded in the receipt. Indexing runs download their run-scoped artifacts.
+The runner discovers the storage root from KFP
 and scopes the prefix to the pipeline name and run ID. If KFP omits the root, set the artifact
 bucket explicitly; otherwise it falls back to the input bucket.
 
@@ -147,9 +155,12 @@ pipeline result intact. Correct storage access and retry without creating anothe
 uv run python scripts/run_experiment.py --download-run <run-name>
 ```
 
-This command uses the existing receipt and target. It works even when `DOWNLOAD_ARTIFACTS=false`.
-`--dry-run` makes no artifact requests. Automatic downloads require a successful run; a failed or
-still-running experiment is inspected through the pipeline UI.
+This command uses the endpoint/project saved in the receipt and refreshes the existing run state
+from KFP, so it also recovers a run that succeeded after a wait timeout or interruption. It never
+submits an experiment. A failed or still-running run is reported without downloading. An unknown
+run ID requires inspection in the pipeline UI. Older records may still use their existing
+`target.json`; new runs do not create it. The command works even when `DOWNLOAD_ARTIFACTS=false`.
+`--dry-run` makes no artifact requests.
 
 ## Indexing and answer checks
 
@@ -160,7 +171,11 @@ With automatic downloads, use `work/runs/<run-name>/artifacts/best-pattern/patte
 uv run python scripts/run_experiment.py --kind indexing
 ```
 
-The pattern file is a product output, not another hand-written configuration. Collection/model
+The pattern file is a product output, not another hand-written configuration. Relative pattern
+paths resolve from the selected .env file's directory; `~` is expanded, as for local pipeline paths.
+Indexing dry-run validates the pattern blueprint without network access. Indexing gets model and
+chunking choices from the pattern; optimization-only model lists, benchmark and pattern-count
+settings are not required for this step. Collection/model
 bindings in your inference notebook must match this indexing run. Use the product notebook's ask
 path against the populated collection and check factual accuracy and retrieved audio support
 separately. Full ticket evidence and remaining product checks are in [validation](validation.md).

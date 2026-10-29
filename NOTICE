@@ -2,8 +2,9 @@ AutoRAG audio sample
 
 The sample helper code and documentation are provided under Apache License 2.0.
 
-The bundled recordings, story text and original question/answer benchmark have
-separate provenance described in data/rag/audio/sample/README.md. Private use in this repository
+The bundled recordings, reference text and question/answer benchmarks have
+separate provenance described in data/rag/audio/sample/README.md and
+data/rag/audio/sample_1/README.md. Private use in this repository
 was authorised by Tomasz Guzik on 2026-10-26. Public redistribution clearance
 and applicable data licensing remain pending. They are not licensed by the
 repository's Apache-2.0 code license.

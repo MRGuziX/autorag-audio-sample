@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from dotenv import dotenv_values
 from lib.artifacts import download_run_artifacts
-from lib.indexing import prepare
+from lib.indexing import prepare, validate_pattern
 from lib.openshift import context_info, oc
 from lib.pipelines import all_items, discover_endpoint, pin_pipeline, read_package, remote_call, submit
 from lib.sample import (
@@ -23,6 +23,7 @@ from lib.sample import (
     optimization_params,
     read_json,
     require,
+    sha256,
     validate_config,
     validate_pipeline_params,
     write_json,
@@ -61,7 +62,7 @@ def model_list(env: dict, name: str) -> list[str]:
     return values
 
 
-def configuration(env: dict) -> dict:
+def configuration(env: dict, kind: str = "optimization") -> dict:
     """Match AutoX CI variable names; use the same dataset paths for execution and uploads."""
     mapping = {
         "bucket": "INPUT_DATA_BUCKET_NAME",
@@ -74,6 +75,14 @@ def configuration(env: dict) -> dict:
         value = env.get(name, "").strip()
         non_placeholder(value, name)
         config[field] = value
+    config["preset"] = env.get("AUTORAG_PRESET", "speed").strip()
+    raw = env.get("AUTORAG_INPUT_DATA_KEYS", '["data/rag/audio/sample/documents"]').strip()
+    try:
+        config["input_data_keys"] = json.loads(raw)
+    except json.JSONDecodeError:
+        raise ValueError("AUTORAG_INPUT_DATA_KEYS must be a JSON array with one audio directory") from None
+    if kind == "indexing":
+        return validate_config(config, kind)
     try:
         patterns = int(env.get("AUTORAG_MAX_RAG_PATTERNS", "4"))
     except ValueError:
@@ -82,17 +91,11 @@ def configuration(env: dict) -> dict:
         test_data_secret_name=env.get("TEST_DATA_SECRET_NAME", "").strip()
         or config["input_data_secret_name"],
         test_data_bucket_name=env.get("TEST_DATA_BUCKET_NAME", "").strip() or config["bucket"],
-        preset=env.get("AUTORAG_PRESET", "speed").strip(),
         embedding_models=model_list(env, "AUTORAG_EMBEDDING_MODELS"),
         generation_models=model_list(env, "AUTORAG_GENERATION_MODELS"),
         optimization_metric=env.get("AUTORAG_OPTIMIZATION_METRIC", "answer_correctness").strip(),
         optimization_max_rag_patterns=patterns,
     )
-    raw = env.get("AUTORAG_INPUT_DATA_KEYS", '["data/rag/audio/sample/documents"]').strip()
-    try:
-        config["input_data_keys"] = json.loads(raw)
-    except json.JSONDecodeError:
-        raise ValueError("AUTORAG_INPUT_DATA_KEYS must be a JSON array with one audio directory") from None
     config["test_data_key"] = env.get("AUTORAG_TEST_DATA_KEY", "data/rag/audio/sample/benchmark.json").strip()
     if flag(env, "AUTORAG_UPLOAD_TEST_DATASETS"):
         require(
@@ -101,6 +104,11 @@ def configuration(env: dict) -> dict:
             "Uploads require the same input and benchmark bucket and Connection",
         )
     return validate_config(config)
+
+
+def configured_path(value: str, env_file: Path) -> Path:
+    path = Path(value.strip()).expanduser()
+    return (path if path.is_absolute() else env_file.resolve().parent / path).resolve()
 
 
 def client_for(env: dict, namespace: str):
@@ -181,12 +189,18 @@ def main(argv=None):
         )
         directory = ROOT / "work/runs" / args.download_run
         receipt = read_json(directory / "receipt.json")
-        require(receipt["state"] == "SUCCEEDED", "Artifact download requires a succeeded run receipt")
-        target = read_json(directory / "target.json")
+        require(bool(receipt.get("run_id")), "No run ID recorded; inspect the pipeline UI before retrying")
+        target = receipt
+        if not receipt.get("endpoint") or not receipt.get("namespace"):
+            target = read_json(directory / "target.json")
         client, _ = client_for({**env, "RHOAI_KFP_URL": target["endpoint"]}, target["namespace"])
+        run = remote_call("run state lookup", client.get_run, run_id=receipt["run_id"])
+        receipt.update(state=run.state, checked_at=datetime.now(UTC).isoformat())
+        write_json(directory / "receipt.json", receipt)
+        require(run.state == "SUCCEEDED", f"Run state is {run.state}; artifacts require a succeeded run")
         download_run_artifacts(client, env, directory)
         return
-    config = configuration(env)
+    config = configuration(env, args.kind)
     namespace = env.get("RHOAI_PROJECT_NAME", "").strip()
     non_placeholder(namespace, "RHOAI_PROJECT_NAME")
     experiment = env.get("AUTORAG_EXPERIMENT_NAME", "autorag-audio-sample").strip()
@@ -196,14 +210,17 @@ def main(argv=None):
     except ValueError:
         raise ValueError("RHOAI_PIPELINE_RUN_TIMEOUT must be a positive integer in seconds") from None
     require(timeout > 0, "RHOAI_PIPELINE_RUN_TIMEOUT must be positive")
-    pattern, collection = None, None
-    params = optimization_params(config)
+    pattern, collection, pattern_digest = None, None, None
+    params = optimization_params(config) if args.kind == "optimization" else None
     plan = None
     if args.kind == "indexing":
         non_placeholder(env.get("AUTORAG_PATTERN_FILE"), "AUTORAG_PATTERN_FILE")
         collection = env.get("AUTORAG_COLLECTION_NAME", "").strip()
         non_placeholder(collection, "AUTORAG_COLLECTION_NAME")
-        pattern = read_json(Path(env["AUTORAG_PATTERN_FILE"]))
+        pattern_path = configured_path(env["AUTORAG_PATTERN_FILE"], args.env_file)
+        pattern = read_json(pattern_path)
+        validate_pattern(pattern, config["preset"])
+        pattern_digest = sha256(pattern_path)
     elif flag(env, "AUTORAG_UPLOAD_TEST_DATASETS"):
         plan = upload_plan(config)
     name = OPTIMIZATION_PIPELINE if args.kind == "optimization" else INDEXING_PIPELINE
@@ -211,21 +228,18 @@ def main(argv=None):
         "AUTORAG_PIPELINE_PATH" if args.kind == "optimization" else "AUTORAG_INDEXING_PIPELINE_PATH"
     )
     raw_path = env.get(path_variable, "").strip()
-    spec, package_content, local_path, bound = None, None, None, None
+    spec, package_content, local_path = None, None, None
     if raw_path:
-        local_path = Path(raw_path).expanduser()
-        if not local_path.is_absolute():
-            local_path = args.env_file.resolve().parent / local_path
-        local_path = local_path.resolve()
+        local_path = configured_path(raw_path, args.env_file)
         spec, package_content = read_package(local_path, name)
         if args.kind == "indexing":
-            params, bound = prepare(pattern, spec, config, collection)
+            params = prepare(pattern, spec, config, collection)
         validate_pipeline_params(params, spec, name)
     print(f"Project: {namespace}; experiment: {experiment}; pipeline: {args.kind}")
     print(
         f"Pipeline source: local package {local_path}" if local_path else f"Pipeline source: managed {name}"
     )
-    print(f"Audio: s3://{config['bucket']}/{params['input_data_keys'][0]}")
+    print(f"Audio: s3://{config['bucket']}/{config['input_data_keys'][0]}")
     if args.kind == "optimization":
         print(
             f"Dataset upload: enabled; {len(plan)} local files will be verified in S3 before submission"
@@ -252,14 +266,9 @@ def main(argv=None):
     require(bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", run_name)), "Invalid AUTORAG_RUN_NAME")
     directory = ROOT / "work/runs" / run_name
     require(not directory.exists(), f"Run record already exists: {directory}; inspect it before retrying")
-    directory.mkdir(parents=True, exist_ok=False)
-    print(f"Run records (generated automatically): {directory}")
     package_path = None
     if local_path:
-        package_path = directory / "pipeline.yaml"
-        package_path.write_bytes(package_content)
         pinned = {
-            "source": "local",
             "pipeline_id": None,
             "version_id": None,
             "package_path": str(local_path),
@@ -275,16 +284,10 @@ def main(argv=None):
             env.get(f"AUTORAG_{kind_env}_PIPELINE_ID") or None,
             env.get(f"AUTORAG_{kind_env}_VERSION_ID") or None,
         )
-        pinned["source"] = "managed"
         print(f"Pinned {args.kind}: pipeline {pinned['pipeline_id']}, version {pinned['version_id']}")
         if args.kind == "indexing":
-            params, bound = prepare(pattern, spec, config, collection)
-    if bound is not None:
-        write_json(directory / "pattern.bound.json", bound["pattern"])
+            params = prepare(pattern, spec, config, collection)
     validate_pipeline_params(params, spec, name)
-    write_json(directory / "spec.json", spec)
-    write_json(directory / "params.json", params)
-    write_json(directory / "target.json", {"namespace": namespace, "endpoint": endpoint, **pinned})
     if plan is not None:
         upload(env, config, plan)
     experiments = [
@@ -299,6 +302,14 @@ def main(argv=None):
         experiments = [
             remote_call("experiment creation", client.create_experiment, name=experiment, namespace=namespace)
         ]
+    # Reserve only after preparation succeeds; concurrent submissions still cannot share a name.
+    directory.mkdir(parents=True, exist_ok=False)
+    print(f"Run records (generated automatically): {directory}")
+    if local_path:
+        package_path = directory / "pipeline.yaml"
+        package_path.write_bytes(package_content)
+    write_json(directory / "spec.json", spec)
+    write_json(directory / "params.json", params)
     receipt = directory / "receipt.json"
     print(f"Submitting {run_name}. If interrupted, check {receipt} and the pipelines UI before retrying.")
     run_id = submit(
@@ -310,6 +321,9 @@ def main(argv=None):
         run_name=run_name,
         directory=directory,
         timeout=timeout,
+        namespace=namespace,
+        endpoint=endpoint,
+        pattern_sha256=pattern_digest,
         package_path=package_path,
     )
     print(f"Completed {args.kind}; run ID: {run_id}")

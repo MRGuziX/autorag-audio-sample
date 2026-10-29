@@ -135,6 +135,9 @@ def submit(
     run_name: str,
     directory: Path,
     timeout: int,
+    namespace: str,
+    endpoint: str,
+    pattern_sha256: str | None = None,
     package_path: Path | None = None,
 ) -> str:
     """Check the selected source, reserve a receipt, submit once and wait."""
@@ -156,7 +159,9 @@ def submit(
     require(installed == exported, "Pipeline spec differs from inspected spec; start a new run after review")
     validate_pipeline_params(params, installed, name)
     receipt = {
-        "schema_version": 1,
+        "schema_version": 2,
+        "namespace": namespace,
+        "endpoint": endpoint,
         "kind": kind,
         "pipeline_name": name,
         "pipeline_id": pinned["pipeline_id"],
@@ -171,6 +176,8 @@ def submit(
     }
     if package_path is not None:
         receipt.update(package_path=pinned["package_path"], package_sha256=pinned["package_sha256"])
+    if pattern_sha256 is not None:
+        receipt.update(pattern_sha256=pattern_sha256, collection_name=params["collection_name"])
     # Reserve before the remote mutation; never retry an uncertain submission automatically.
     with receipt_path.open("x", encoding="utf-8") as stream:
         json.dump(receipt, stream, indent=2)

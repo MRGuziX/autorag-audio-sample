@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import run_experiment as runner  # noqa: E402
-from lib.sample import INDEXING_PIPELINE, OPTIMIZATION_PIPELINE, read_json, write_json  # noqa: E402
+from lib.sample import INDEXING_PIPELINE, OPTIMIZATION_PIPELINE, read_json, sha256, write_json  # noqa: E402
 from test_sample import indexing_pattern  # noqa: E402
 
 
@@ -55,6 +55,60 @@ def mock_client(kind="optimization"):
 
 
 class EnvRunnerTests(unittest.TestCase):
+    def test_managed_indexing_dry_run_validates_pattern_without_optimization_settings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "pattern.json"
+            env = {
+                **environment(),
+                "AUTORAG_PATTERN_FILE": "pattern.json",
+                "AUTORAG_COLLECTION_NAME": "collection",
+                "AUTORAG_MAX_RAG_PATTERNS": "irrelevant",
+                "AUTORAG_UPLOAD_TEST_DATASETS": "true",
+                "TEST_DATA_BUCKET_NAME": "other-bucket",
+            }
+            env.pop("AUTORAG_EMBEDDING_MODELS")
+            env.pop("AUTORAG_GENERATION_MODELS")
+            with (
+                patch.object(runner, "read_env", return_value=env),
+                patch.object(runner, "client_for") as connect,
+                patch.object(runner, "upload") as upload,
+            ):
+                write_json(path, {})
+                with self.assertRaisesRegex(ValueError, "Invalid pattern"):
+                    runner.main(["--env-file", str(root / ".env"), "--kind", "indexing", "--dry-run"])
+                pattern = indexing_pattern()
+                write_json(path, pattern)
+                runner.main(["--env-file", str(root / ".env"), "--kind", "indexing", "--dry-run"])
+                pattern["indexing"]["pipeline_spec"]["parameters"]["chunk_size"] = 10
+                write_json(path, pattern)
+                with self.assertRaisesRegex(ValueError, "disagrees"):
+                    runner.main(["--env-file", str(root / ".env"), "--kind", "indexing", "--dry-run"])
+            connect.assert_not_called()
+            upload.assert_not_called()
+
+    def test_preparation_failures_do_not_reserve_fixed_run_name(self):
+        for failure in ("authentication", "upload"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as tmp:
+                client = mock_client()
+                env = {**environment(), "AUTORAG_UPLOAD_TEST_DATASETS": "true"}
+                with (
+                    patch.object(runner, "ROOT", Path(tmp)),
+                    patch.object(runner, "read_env", return_value=env),
+                    patch.object(runner, "upload_plan", return_value=[]),
+                    patch.object(runner, "client_for", return_value=(client, "https://kfp.test")) as connect,
+                    patch.object(runner, "upload") as upload,
+                ):
+                    broken = connect if failure == "authentication" else upload
+                    broken.side_effect = RuntimeError("preparation failed")
+                    with self.assertRaisesRegex(RuntimeError, "preparation failed"):
+                        runner.main([])
+                    self.assertFalse((Path(tmp) / "work/runs/test-run").exists())
+                    client.run_pipeline.assert_not_called()
+                    broken.side_effect = None
+                    runner.main([])
+                    client.run_pipeline.assert_called_once()
+
     def test_defaults_select_sample_and_support_separate_benchmark_bucket(self):
         env = environment()
         env["TEST_DATA_BUCKET_NAME"] = "benchmark-bucket"
@@ -159,6 +213,10 @@ class EnvRunnerTests(unittest.TestCase):
                 runner.main([])
             directory = Path(tmp) / "work/runs/test-run"
             self.assertEqual(read_json(directory / "receipt.json")["state"], "SUCCEEDED")
+            receipt = read_json(directory / "receipt.json")
+            self.assertEqual(receipt["namespace"], "sample-project")
+            self.assertEqual(receipt["endpoint"], "https://pipeline.example.test")
+            self.assertFalse((directory / "target.json").exists())
             self.assertIn("platform_spec", read_json(directory / "spec.json"))
             for path in directory.iterdir():
                 self.assertNotIn("private-token-do-not-save", path.read_text())
@@ -261,8 +319,10 @@ class EnvRunnerTests(unittest.TestCase):
             params = read_json(directory / "params.json")
             self.assertEqual(params["collection_name"], "new_collection")
             self.assertEqual(params["input_data_keys"], ["data/rag/audio/sample/documents"])
-            bound = read_json(directory / "pattern.bound.json")
-            self.assertEqual(bound["settings"]["store_binding"]["collection_name"], "new_collection")
+            receipt = read_json(directory / "receipt.json")
+            self.assertEqual(receipt["collection_name"], "new_collection")
+            self.assertEqual(receipt["pattern_sha256"], sha256(pattern_path))
+            self.assertFalse((directory / "pattern.bound.json").exists())
             client.create_experiment.assert_not_called()
             upload.assert_not_called()
 

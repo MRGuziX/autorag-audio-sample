@@ -1,89 +1,72 @@
 # Acceptance and validation record
 
-Target: RHOAIENG-96837, with relevant parent/dependency criteria. No product run is recorded yet.
-The repository currently implements the local data/configuration/tooling portion. The detailed
-planning document remains local to the developer workspace.
+Target: [RHOAIENG-96837](https://redhat.atlassian.net/browse/RHOAIENG-96837).
+The sample implements staging, managed/local pipeline submission, artifact downloads and indexing.
+A complete product walkthrough with recorded optimization/indexing runs and a grounded answer
+remains pending. Local tests do not establish the installed product's ASR compatibility.
 
 ## Local checks
 
-Local validation on macOS / Python 3.12:
+Validation on macOS / Python 3.12:
 
-- 60 offline tests cover TC-P-5 parameters, directory-based datasets, custom corpus paths, upload
-  isolation, pipeline identity/contract checks, full wrapped-spec comparisons, `.env` precedence,
-  token/`oc` authentication, experiment reuse, indexing bindings and human answer evidence.
-- Artifact-download tests cover run-specific S3 prefixes, bucket discovery/overrides, pagination,
-  path validation, interrupted transfers, download status and retries without experiment submission.
-- Best-pattern tests cover metric/evaluator selection, stable ties, missing/non-finite scores,
-  missing ZIP detection and downloading only the winning folder plus starter kit.
-- Run receipts preserve uncertain submissions and wait timeouts without retrying the run.
-- Local package tests cover blank/unset managed fallback, invalid-path rejection, exact YAML
-  snapshots, separate Kubernetes platform settings, package submission and source provenance.
-  The local optimization YAML supplied by the user passes package/parameter checks without a run.
-- Ruff lint/format and the dependency lockfile checks pass.
-- The private `.env` passes an offline dry run. Evidence worksheets use that same file.
-- The bundled originals pass directory and benchmark checks. The original recordings decoded with local
-  ffmpeg during initial preparation; this does not establish product-container support.
-- A read-only pipeline API inspection confirmed `pipeline_spec` / `platform_spec` wrappers.
-  The runner preserves both when snapshotting and checking the installed version.
+- 69 offline tests cover configuration, both bundled datasets, custom audio/benchmark-only inputs,
+  upload isolation and conflicts, managed/local pipeline contracts, authentication and submission.
+- Run recovery tests cover timeout followed by remote success, active/failed runs, old target.json
+  records and retries without resubmission. Unknown submission outcomes remain protected.
+- New receipts contain endpoint/project and source metadata. Indexing receipts retain the selected
+  pattern hash and target collection without generating target.json or pattern.bound.json.
+- Artifact tests cover evaluator consistency, missing/non-finite scores, tied winners identified by
+  the product ZIP, mismatched kits, optional leaderboard download, safe paths and atomic transfers.
+- Indexing dry-run rejects malformed/inconsistent patterns without contacting KFP. Indexing does not
+  require optimization model lists, benchmark settings or a pattern count.
+- Ruff lint/format and dependency lockfile checks pass.
 
-The normal entry point is `scripts/run_experiment.py`, configured only through `.env`. Shared
-implementation lives in `scripts/lib/`; the former JSON configuration and manual submission tools
-have been removed. The user runs and verifies the actual cluster experiments. No pipeline run or
-S3 upload was performed during implementation or cleanup.
+Commands are listed in the README. No cluster experiment or S3 upload was performed while
+implementing these fixes. The original mixed-format corpus and the additional English corpus pass
+structural validation; human listening review and public redistribution clearance remain open.
 
-These checks establish sample integrity and helper behavior. Product execution, answer grounding,
-listening review and public distribution clearance remain open and are recorded here when completed.
+## Sample acceptance checklist
 
-## Baseline to record before a product run
+- [ ] Follow README from a clean clone with the documented prerequisites.
+- [ ] Stage the selected recordings and source-aligned benchmark at the configured S3 keys.
+- [ ] Complete the official optimization pipeline and verify a nonempty transcript for every clip.
+- [ ] Check the optimization metric, selected pattern, product starter kit, notebooks and leaderboard.
+- [ ] Complete official full-corpus indexing into the intended fresh collection.
+- [ ] Use the product inference notebook with the same pattern, embeddings, database and collection.
+- [ ] Record one observed correct answer and retrieved audio source/excerpt checked against the recording.
+- [ ] Record both run IDs, versions/image digests, ASR model, corpus size/duration and resulting scores.
+- [ ] Record known format, language, resource and disconnected limitations honestly.
+- [ ] Clear corpus redistribution/attribution and agree the public destination with AIS BU before publication.
 
-Keep filled private values under ignored `work/` or another private evidence location:
+Keep filled settings and detailed run records under ignored work/; share only reviewed, sanitized
+results. The code license does not establish rights to either corpus. Do not reuse historical
+base/turbo benchmark results as measurements from this starter.
 
-| Item | Status |
+## Product compatibility checks
+
+These apply before making the corresponding support claims; they are not extra configuration
+steps for a sample user. Track fixes in their product repositories rather than adding them here:
+
+| Claim | Required product evidence |
 | --- | --- |
-| Repository revision and dataset hashes | Pending review |
-| RHOAI / OCP / DSPA-KFP versions and project | Not recorded |
-| Optimization and indexing pipeline IDs/version IDs | Not recorded |
-| Actual execution-image digests for both extraction paths | Not recorded |
-| ai4rag / Docling / Transformers / ffmpeg versions | Not recorded |
-| ASR backend/model revision, modelcar digest and effective local weights path | Not recorded |
-| MaaS embedding/generation IDs; vector DB backend | Not recorded |
-| Actual CPU/memory requests/limits, quota and observed usage | Not recorded |
-| Original M4A decode/extraction result in the product image | Not tested |
+| Original M4A support | Decode and extract the original M4A in the selected image; WAV conversion is not M4A evidence (RHAI-8244) |
+| Local-only ASR | Actual image uses complete read-only local weights with external model-host egress blocked; missing weights fail without downloading (RHOAIENG-97601) |
+| Mixed audio/document and text-only compatibility | Corresponding product regressions pass before claiming broader support (RHOAIENG-88080) |
+| UI picker support | Select audio and verify forwarded keys in the actual dashboard (RHOAIENG-96103) |
+| Retrieved chunk timing | Hybrid/Docling chunks retain ordered source timing ranges; no word-level accuracy claim (RHOAIENG-96490) |
 
-## Acceptance checklist
+Record the selected RHOAI/OCP/DSPA versions, optimization/indexing pipeline IDs and versions,
+execution-image digests, ai4rag/Docling/Transformers/ffmpeg versions, modelcar/model revision and
+local weights path. Source fixes or resolved issue statuses alone do not prove an installed baseline.
 
-- [ ] README can be followed from a clean clone using documented prerequisites only.
-- [ ] S3 contains exactly the selected audio files and a source-aligned optimization benchmark.
-- [ ] Official optimization run succeeds; every expected clip has a nonempty ASR transcript.
-- [ ] Docling JSON contains usable segment timing when checking the local-ASR product contract.
-- [ ] Leaderboard, selected pattern, evaluation, notebooks and starter-kit availability are documented.
-- [ ] Pattern is selected using the optimization metric before indexing.
-- [ ] Official indexing run processes the full sample corpus and populates the intended collection.
-- [ ] Inference uses the same pattern, embedding settings, database and indexed collection.
-- [ ] Worked answer is correct and supported by retrieved audio source/excerpt checked against recording.
-- [ ] Benchmark answer checks have factual/source judgments and all outcomes recorded.
-- [ ] Run IDs, versions, data sizes, duration, model details, metrics and failures are recorded.
-- [ ] Original M4A result is recorded honestly; WAV conversion is not counted as M4A support.
-- [ ] Mixed audio+document and text-only product checks support any compatibility claims made.
-- [ ] File-picker selection/forwarded keys are tested before claiming a working UI path.
-- [ ] External model-host egress blocked + read-only local weights check supports any local-only ASR claim.
-- [ ] Missing weights fail usefully without runtime download; internal service access still works.
-- [ ] Optional hybrid chunk timings, if advertised, are ordered and within the source duration.
-- [ ] Public data rights/attribution and listening review are resolved before public release.
-- [ ] Public destination is agreed with AIS BU and public clean-clone walkthrough passes before full ticket closure.
+## Optional answer worksheet
 
-## Evidence worksheet
+`collect_evidence.py` combines local dataset metadata, supplied receipts and manually reviewed
+benchmark responses. It needs local recordings and benchmark files; it is optional and does not
+certify product behavior or automatically establish run/data/pattern lineage. The normal
+experiment flow does not require it or a separate metadata configuration.
 
-`collect_evidence.py` can combine local metadata and run receipts and generate a benchmark answer
-worksheet. It never marks the checklist complete automatically. Review retrieved sources against
-audio and record failed answers as well as passes. Report N/M and product metrics without inventing
-a quality threshold or reusing historical base/turbo results as this sample's measurements.
-
-For the ticket comment, record the eventual repo URL/visibility; formats/codecs and actual ASR model;
-optimization/indexing run IDs; corpus size and duration; grounded question/result; and known language,
-M4A, disconnected, resource and UI limitations. Posting Jira comments and public publication are
-separate actions; this repository's local commands do neither.
-
-These answer checks reuse the optimization benchmark and do not measure performance on unseen
-questions. The original benchmark includes fictional story facts. Record actual listening review and the distribution decision before making
-quality or public redistribution claims.
+Review retrieved sources against the audio and record failed answers as well as passes. These
+checks reuse optimization questions and do not measure performance on unseen questions.
+For the ticket, prepare the eventual repository URL, formats/model, both successful run IDs,
+worked answer/source and known gaps. Publication and Jira posting are separate actions.

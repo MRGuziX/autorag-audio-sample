@@ -62,7 +62,7 @@ def non_placeholder(value, name: str) -> None:
     )
 
 
-def validate_config(config: dict) -> dict:
+def validate_config(config: dict, kind: str = "optimization") -> dict:
     """Validate the configuration resolved from .env."""
     expected = {
         "bucket",
@@ -78,7 +78,16 @@ def validate_config(config: dict) -> dict:
         "optimization_max_rag_patterns",
         "preset",
     }
-    optional = {"test_data_bucket_name"}
+    if kind == "indexing":
+        expected = {
+            "bucket",
+            "input_data_keys",
+            "input_data_secret_name",
+            "maas_secret_name",
+            "db_secret_name",
+            "preset",
+        }
+    optional = {"test_data_bucket_name"} if kind == "optimization" else set()
     require(
         isinstance(config, dict) and expected <= set(config) and not set(config) - expected - optional,
         "Unexpected or missing experiment configuration fields",
@@ -95,22 +104,22 @@ def validate_config(config: dict) -> dict:
         bucket = config["test_data_bucket_name"]
         non_placeholder(bucket, "test_data_bucket_name")
         require("/" not in bucket and ":" not in bucket, "test_data_bucket_name must be a bucket name")
-    for name in ("embedding_models", "generation_models"):
-        require(isinstance(config[name], list) and bool(config[name]), f"{name} must be a nonempty list")
-        for model in config[name]:
-            non_placeholder(model, name)
     require(config["preset"] in ("speed", "balanced"), "preset must be speed or balanced")
-    patterns = config["optimization_max_rag_patterns"]
-    require(type(patterns) is int and 4 <= patterns <= 10, "optimization_max_rag_patterns must be 4–10")
-    if {"input_data_keys", "test_data_key"} & config.keys():
-        require({"input_data_keys", "test_data_key"} <= config.keys(), "Set both S3 dataset paths")
-        keys = config["input_data_keys"]
-        require(
-            isinstance(keys, list) and len(keys) == 1,
-            "Set one explicit S3 audio directory",
-        )
-        non_placeholder(keys[0], "input_data_keys")
-        require(len(relative_path(keys[0].rstrip("/")).split("/")) >= 2, "Use a dedicated audio directory")
+    if kind == "optimization":
+        for name in ("embedding_models", "generation_models"):
+            require(isinstance(config[name], list) and bool(config[name]), f"{name} must be a nonempty list")
+            for model in config[name]:
+                non_placeholder(model, name)
+        patterns = config["optimization_max_rag_patterns"]
+        require(type(patterns) is int and 4 <= patterns <= 10, "optimization_max_rag_patterns must be 4–10")
+    keys = config["input_data_keys"]
+    require(
+        isinstance(keys, list) and len(keys) == 1,
+        "Set one explicit S3 audio directory",
+    )
+    non_placeholder(keys[0], "input_data_keys")
+    require(len(relative_path(keys[0].rstrip("/")).split("/")) >= 2, "Use a dedicated audio directory")
+    if kind == "optimization":
         non_placeholder(config["test_data_key"], "test_data_key")
         relative_path(config["test_data_key"])
         require(
@@ -166,7 +175,6 @@ def load_sample(
         require(path.stat().st_size > 0, f"Empty audio file: {path.name}")
         files.append(
             {
-                "path": f"{documents_dir.rstrip('/')}/{path.name}",
                 "object_key": f"{documents_dir.rstrip('/')}/{path.name}",
                 "bytes": path.stat().st_size,
                 "sha256": sha256(path),
@@ -177,9 +185,7 @@ def load_sample(
     require(benchmark_path.is_file(), f"Add your questions and expected answers to {benchmark_path}")
     benchmark = read_json(benchmark_path)
     allowed = {
-        key
-        for entry in files
-        for key in (entry["object_key"], entry["path"], f"documents/{Path(entry['path']).name}")
+        key for entry in files for key in (entry["object_key"], f"documents/{Path(entry['object_key']).name}")
     }
     validate_questions(benchmark, allowed, "benchmark")
     return files, benchmark

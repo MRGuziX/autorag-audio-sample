@@ -1,12 +1,62 @@
 # AutoRAG audio sample
 
-Run an audio RAG experiment on OpenShift AI with **one `.env` file and one command**.
+Run an audio RAG experiment on OpenShift AI with **one `.env` file and one command** from this
+repository, or through the UI.
 The pipeline reads audio from S3, transcribes it with Docling ASR and optimizes RAG patterns.
 After selecting a pattern, use the same `.env` to index the full corpus and ask grounded questions.
 
-## Choose your data
+> [!important] Pre-requisites\
+> To use that sample regardless the way (UI or code) You need to: \
+> 1. Be able to log in to the OpenShift Cluster.
+> 2. Your project it is created.
+> 3. Secrets and connections (to Vector Stores, S3 buckets, Models) are set
 
-The bundled Polish recordings and benchmark are ready at the default paths:
+## Run UI-based experiment
+
+---
+Login to cluster:
+![1_openshift_main.png](images/1_openshift_main.png)
+
+Go to AutoRAG tab (Hamburger > Gen AI Studio > AutoRAG) and `Create Run`:
+![2_autorag_create_experiment.png](images/2_autorag_create_experiment.png)
+![3_autorag_first_tab.png](images/3_autorag_first_tab.png)
+
+Set experiment name, its description and connection to MaaS (your models):
+![4_set_details.png](images/4_set_details.png)
+
+Pick S3 connection. Then You will be able to browse bucket and pick yours dataset:
+![5_set_s3_connection.png](images/5_set_s3_connection.png)
+![6_pick_documents.png](images/6_pick_documents.png)
+
+Now you need to pick the type of Vector Store (Milvus, PGVector, Neo4j).
+Then pick from Yours S3 or Local Benchmark file against which we will be run experiment.
+Choose what preset You will use:
+![7_pick_vectorstore_benchmark.png](images/7_pick_vectorstore_benchmark.png)
+
+Choose Metric, Max Rag Patterns, Models:
+![8_set_preset_patterns.png](images/8_set_preset_patterns.png)
+
+Then You can press `Create New Run` and You will see:
+![9_fresh experiment.png](images/9_fresh%20experiment.png)
+
+After some time (depends on the size of documents and picked preset) You will see finished experiment
+with proper data, and scores:
+![10_done_experiment.png](images/10_done_experiment.png)
+
+You can try trained patterns in few ways:
+![11_experiment_options.png](images/11_experiment_options.png)
+
+After experiment in your S3 bucket you will see new files created by it. You will find few keys with
+information about the experiment, what documents were use, what kind of patterns we produced etc.
+![12_s3_after_experiment.png](images/12_s3_after_experiment.png)
+
+## Run code-based experiment
+
+---
+
+### Choose your data
+
+The bundled English recordings and benchmark are ready at the default paths:
 
 ```dotenv
 AUTORAG_INPUT_DATA_KEYS=["data/rag/audio/sample/documents"]
@@ -15,13 +65,13 @@ AUTORAG_TEST_DATA_KEY=data/rag/audio/sample/benchmark.json
 
 To use your own data, drop recordings into `data/rag/audio/users/documents/`, add
 `data/rag/audio/users/benchmark.json`, then change both paths in `.env` to those locations.
-An additional English dataset is available at `data/rag/audio/sample_1/`: three MP3 recordings,
+An additional English dataset is available at `data/rag/audio/sample/`: three MP3 recordings,
 a 20-question `benchmark.json` and local reference transcripts. Set the two paths to
-`data/rag/audio/sample_1/documents` and `data/rag/audio/sample_1/benchmark.json` to use it.
+`data/rag/audio/sample/documents` and `data/rag/audio/sample/benchmark.json` to use it.
 
 See the [benchmark example](data/README.md). No preparation command or metadata file is required.
 
-## Configure once
+### Configure once
 
 You need an existing RHOAI project, a ready pipeline server with the managed AutoRAG pipelines,
 an S3 bucket, and project Connections for S3, MaaS and Milvus/PGVector.
@@ -53,10 +103,10 @@ accepts `--env-file /path/to/.env.rag`. Explicit shell variables override file v
 The example enables `AUTORAG_UPLOAD_TEST_DATASETS=true`: the runner reads the two dataset paths
 locally and uploads to those same keys in S3. Set it to `false` to use objects already in S3.
 Change `AUTORAG_INPUT_DATA_KEYS` and `AUTORAG_TEST_DATA_KEY` to switch datasets in either mode.
-Metric `answer_correctness`, four patterns and preset `speed` match TC-P-5.
+Metric `answer_correctness`, four patterns and preset `speed`.
 Use fresh paths when replacing uploaded data; conflicting objects are refused.
 
-## Run
+### Run
 
 Leave `AUTORAG_PIPELINE_PATH` blank to use the managed optimization pipeline. To use a compiled local
 pipeline instead, set its path in the same `.env`, for example:
@@ -111,7 +161,7 @@ run running; check the printed receipt and pipelines UI before submitting anothe
 Local YAML uses the container images it references; changing the pipeline source alone does not
 install an ASR fix in those images.
 
-## Select a pattern, index and ask
+### Select a pattern, index and ask
 
 With downloads enabled, the selected pattern's `pattern.json`, notebooks and evaluation files are
 saved under `work/runs/<run-name>/artifacts/best-pattern/`, with `starter_kit.zip` and
@@ -177,7 +227,7 @@ Public corpus redistribution clearance and listening review remain pending. Orig
 depends on the installed product image.
 Helper code is Apache-2.0; corpus rights are separate. See [NOTICE](NOTICE) and [data provenance](data/rag/audio/sample/README.md).
 
-## Local checks
+### Local checks
 
 ```bash
 uv sync --frozen --dev

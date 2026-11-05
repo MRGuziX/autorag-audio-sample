@@ -48,14 +48,19 @@ def config():
     }
 
 
-def indexing_pattern():
-    return {
+def indexing_pattern(provider="milvus"):
+    pattern = {
         "name": "selected-pattern",
         "settings": {
-            "store_binding": {"provider_type": "milvus", "collection_name": "optimization_collection"},
+            "store_binding": {"provider_type": provider, "collection_name": "optimization_collection"},
             "embedding": {"model_id": "multilingual-embedding", "embedding_params": {}},
             "chunking": {"method": "recursive", "chunk_size": 512, "chunk_overlap": 64},
-            "generation": {"language": {"code": "pl"}},
+            "generation": {
+                "model_id": "generation",
+                "temperature": 0.2,
+                "max_completion_tokens": 2048,
+                "language": {"code": "pl"},
+            },
         },
         "indexing": {
             "pipeline_spec": {
@@ -66,10 +71,12 @@ def indexing_pattern():
                     "input_data_secret_name": "old-s3",
                     "input_data_bucket_name": "old-bucket",
                     "input_data_keys": ["old-prefix"],
-                    "provider_type": "milvus",
+                    "provider_type": provider,
                     "collection_name": "optimization_collection",
                     "embedding_model_id": "multilingual-embedding",
                     "embedding_params": {},
+                    "foundation_model_id": "generation",
+                    "foundation_model_params": {"temperature": 0.2, "max_completion_tokens": 2048},
                     "chunking_method": "recursive",
                     "chunk_size": 512,
                     "chunk_overlap": 64,
@@ -78,6 +85,13 @@ def indexing_pattern():
             }
         },
     }
+    if provider == "neo4j":
+        # Matches the product blueprint and AutoX CI IDX-P-3 graph-extraction mode.
+        pattern["settings"]["graph_extraction"] = {"mode": "constrained"}
+        pattern["indexing"]["pipeline_spec"]["parameters"]["graph_extraction_config"] = {
+            "mode": "constrained"
+        }
+    return pattern
 
 
 class MemoryS3:
@@ -152,23 +166,20 @@ class SampleDataTests(unittest.TestCase):
 
     def test_bundled_corpus_loads_directly_from_directory(self):
         files, benchmark = load_sample()
-        self.assertEqual((len(files), len(benchmark)), (3, 11))
+        self.assertEqual((len(files), len(benchmark)), (3, 20))
         self.assertEqual(
             {entry["object_key"] for entry in files},
             {
-                "data/rag/audio/sample/documents/anteater_story.mp3",
-                "data/rag/audio/sample/documents/termites_story.wav",
-                "data/rag/audio/sample/documents/capybara_story.m4a",
+                "data/rag/audio/sample/documents/story_10.mp3",
+                "data/rag/audio/sample/documents/story_100.mp3",
+                "data/rag/audio/sample/documents/story_1015.mp3",
             },
         )
 
-    def test_all_bundled_datasets_have_questions_for_each_recording(self):
-        for dataset in ("sample", "sample_1"):
-            with self.subTest(dataset=dataset):
-                prefix = f"data/rag/audio/{dataset}"
-                files, questions = load_sample(f"{prefix}/documents", f"{prefix}/benchmark.json")
-                sources = {key for row in questions for key in row["correct_answer_document_keys"]}
-                self.assertEqual(sources, {row["object_key"] for row in files})
+    def test_bundled_sample_has_questions_for_each_recording(self):
+        files, questions = load_sample()
+        sources = {key for row in questions for key in row["correct_answer_document_keys"]}
+        self.assertEqual(sources, {row["object_key"] for row in files})
 
     def test_outside_audio_symlink_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -196,9 +207,9 @@ class SampleDataTests(unittest.TestCase):
             {
                 f"data/rag/audio/sample/{path}"
                 for path in (
-                    "documents/anteater_story.mp3",
-                    "documents/termites_story.wav",
-                    "documents/capybara_story.m4a",
+                    "documents/story_10.mp3",
+                    "documents/story_100.mp3",
+                    "documents/story_1015.mp3",
                     "benchmark.json",
                 )
             },
@@ -360,6 +371,47 @@ class PipelineContractTests(unittest.TestCase):
         pattern["indexing"]["pipeline_spec"]["parameters"]["chunk_size"] = 2048
         with self.assertRaisesRegex(ValueError, "disagrees"):
             prepare(pattern, self.index_spec, config(), "new_collection")
+
+    def test_neo4j_indexing_preserves_graph_settings_and_rebinds_connection(self):
+        pattern = indexing_pattern("neo4j")
+        untouched = copy.deepcopy(pattern)
+        params = prepare(pattern, self.index_spec, {**config(), "db_secret_name": "neo4j-db"}, "new_graph")
+        self.assertEqual(pattern, untouched)
+        self.assertEqual(params["db_secret_name"], "neo4j-db")
+        self.assertEqual(params["collection_name"], "new_graph")
+        self.assertNotIn("provider_type", params)
+        self.assertEqual(params["foundation_model_id"], "generation")
+        self.assertEqual(
+            params["foundation_model_params"], {"temperature": 0.2, "max_completion_tokens": 2048}
+        )
+        self.assertEqual(params["graph_extraction_config"], {"mode": "constrained"})
+        params["graph_extraction_config"]["mode"] = "changed"
+        self.assertEqual(pattern, untouched)
+
+    def test_neo4j_indexing_rejects_missing_or_conflicting_graph_parameters(self):
+        for key, value in (
+            ("foundation_model_id", "different-generation-model"),
+            ("foundation_model_params", {"temperature": 0.8, "max_completion_tokens": 4096}),
+            ("graph_extraction_config", {"mode": "unconstrained"}),
+        ):
+            for missing in (False, True):
+                with self.subTest(key=key, missing=missing):
+                    pattern = indexing_pattern("neo4j")
+                    blueprint = pattern["indexing"]["pipeline_spec"]["parameters"]
+                    if missing:
+                        blueprint.pop(key)
+                    else:
+                        blueprint[key] = value
+                    with self.assertRaisesRegex(ValueError, f"disagrees.*{key}"):
+                        prepare(pattern, self.index_spec, config(), "new_graph")
+
+    def test_neo4j_indexing_rejects_pipeline_without_graph_parameters(self):
+        for key in ("foundation_model_id", "foundation_model_params", "graph_extraction_config"):
+            with self.subTest(key=key):
+                spec = copy.deepcopy(self.index_spec)
+                spec["root"]["inputDefinitions"]["parameters"].pop(key)
+                with self.assertRaisesRegex(ValueError, f"Unknown pipeline parameters.*{key}"):
+                    prepare(indexing_pattern("neo4j"), spec, config(), "new_graph")
 
     def test_stale_indexing_spec_cannot_silently_drop_preset(self):
         stale_spec = copy.deepcopy(self.index_spec)

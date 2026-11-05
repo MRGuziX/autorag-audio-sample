@@ -9,7 +9,7 @@ remains pending. Local tests do not establish the installed product's ASR compat
 
 Validation on macOS / Python 3.12:
 
-- 69 offline tests cover configuration, both bundled datasets, custom audio/benchmark-only inputs,
+- 72 offline tests cover configuration, the bundled sample, custom audio/benchmark-only inputs,
   upload isolation and conflicts, managed/local pipeline contracts, authentication and submission.
 - Run recovery tests cover timeout followed by remote success, active/failed runs, old target.json
   records and retries without resubmission. Unknown submission outcomes remain protected.
@@ -21,13 +21,15 @@ Validation on macOS / Python 3.12:
   require optimization model lists, benchmark settings or a pattern count.
 - Ruff lint/format and dependency lockfile checks pass.
 
-Commands are listed in the README. No cluster experiment or S3 upload was performed while
-implementing these fixes. The original mixed-format corpus and the additional English corpus pass
+Commands are listed in the [code walkthrough](run-via-code.md#local-development-checks).
+No cluster experiment or S3 upload was performed while implementing these fixes.
+The bundled English MP3 recordings and 20-question benchmark pass
 structural validation; human listening review and public redistribution clearance remain open.
 
 ## Sample acceptance checklist
 
-- [ ] Follow README from a clean clone with the documented prerequisites.
+- [ ] Follow the [UI walkthrough](run-via-ui.md) or [code walkthrough](run-via-code.md) from a clean
+  clone with the documented prerequisites.
 - [ ] Stage the selected recordings and source-aligned benchmark at the configured S3 keys.
 - [ ] Complete the official optimization pipeline and verify a nonempty transcript for every clip.
 - [ ] Check the optimization metric, selected pattern, product starter kit, notebooks and leaderboard.
@@ -39,7 +41,7 @@ structural validation; human listening review and public redistribution clearanc
 - [ ] Clear corpus redistribution/attribution and agree the public destination with AIS BU before publication.
 
 Keep filled settings and detailed run records under ignored work/; share only reviewed, sanitized
-results. The code license does not establish rights to either corpus. Do not reuse historical
+results. The code license does not establish rights to the corpus. Do not reuse historical
 base/turbo benchmark results as measurements from this starter.
 
 ## Product compatibility checks

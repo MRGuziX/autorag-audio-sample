@@ -19,6 +19,6 @@ code license does not grant rights to these recordings or their derived text and
 Only `documents/` and `benchmark.json` are uploaded by the runner. Reference text stays local.
 
 ```dotenv
-AUTORAG_INPUT_DATA_KEYS=["data/rag/audio/sample_1/documents"]
-AUTORAG_TEST_DATA_KEY=data/rag/audio/sample_1/benchmark.json
+AUTORAG_INPUT_DATA_KEYS=["data/rag/audio/sample/documents"]
+AUTORAG_TEST_DATA_KEY=data/rag/audio/sample/benchmark.json
 ```

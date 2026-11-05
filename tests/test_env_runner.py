@@ -61,6 +61,7 @@ class EnvRunnerTests(unittest.TestCase):
             path = root / "pattern.json"
             env = {
                 **environment(),
+                "VECTOR_DB_SECRET_NAME": "neo4j-db",
                 "AUTORAG_PATTERN_FILE": "pattern.json",
                 "AUTORAG_COLLECTION_NAME": "collection",
                 "AUTORAG_MAX_RAG_PATTERNS": "irrelevant",
@@ -77,7 +78,7 @@ class EnvRunnerTests(unittest.TestCase):
                 write_json(path, {})
                 with self.assertRaisesRegex(ValueError, "Invalid pattern"):
                     runner.main(["--env-file", str(root / ".env"), "--kind", "indexing", "--dry-run"])
-                pattern = indexing_pattern()
+                pattern = indexing_pattern("neo4j")
                 write_json(path, pattern)
                 runner.main(["--env-file", str(root / ".env"), "--kind", "indexing", "--dry-run"])
                 pattern["indexing"]["pipeline_spec"]["parameters"]["chunk_size"] = 10
@@ -302,9 +303,10 @@ class EnvRunnerTests(unittest.TestCase):
         ]
         with tempfile.TemporaryDirectory() as tmp:
             pattern_path = Path(tmp) / "pattern.json"
-            write_json(pattern_path, indexing_pattern())
+            write_json(pattern_path, indexing_pattern("neo4j"))
             env = {
                 **environment(),
+                "VECTOR_DB_SECRET_NAME": "neo4j-db",
                 "AUTORAG_PATTERN_FILE": str(pattern_path),
                 "AUTORAG_COLLECTION_NAME": "new_collection",
             }
@@ -317,6 +319,14 @@ class EnvRunnerTests(unittest.TestCase):
                 runner.main(["--kind", "indexing"])
             directory = Path(tmp) / "work/runs/test-run"
             params = read_json(directory / "params.json")
+            self.assertEqual(client.run_pipeline.call_args.kwargs["params"], params)
+            self.assertEqual(params["db_secret_name"], "neo4j-db")
+            self.assertNotIn("provider_type", params)
+            self.assertEqual(params["foundation_model_id"], "generation")
+            self.assertEqual(
+                params["foundation_model_params"], {"temperature": 0.2, "max_completion_tokens": 2048}
+            )
+            self.assertEqual(params["graph_extraction_config"], {"mode": "constrained"})
             self.assertEqual(params["collection_name"], "new_collection")
             self.assertEqual(params["input_data_keys"], ["data/rag/audio/sample/documents"])
             receipt = read_json(directory / "receipt.json")

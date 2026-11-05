@@ -1,237 +1,42 @@
 # AutoRAG audio sample
 
-Run an audio RAG experiment on OpenShift AI with **one `.env` file and one command** from this
-repository, or through the UI.
-The pipeline reads audio from S3, transcribes it with Docling ASR and optimizes RAG patterns.
-After selecting a pattern, use the same `.env` to index the full corpus and ask grounded questions.
+Use this sample to run an audio RAG experiment on OpenShift AI. The pipeline reads recordings
+from S3, transcribes them with Docling ASR and optimizes RAG patterns against a question-and-answer
+benchmark. You can then select a pattern, index your full corpus and ask questions grounded in
+the recordings.
 
-> [!important] Pre-requisites\
-> To use that sample regardless the way (UI or code) You need to: \
-> 1. Be able to log in to the OpenShift Cluster.
-> 2. Your project it is created.
-> 3. Secrets and connections (to Vector Stores, S3 buckets, Models) are set
+The bundled dataset contains English MP3 recordings, 20 benchmark questions and reference
+transcripts under [data/rag/audio/sample/](data/rag/audio/sample/README.md). You can also
+[use your own recordings](data/README.md).
 
-## Run UI-based experiment
+## Choose how to run
 
----
-Login to cluster:
-![1_openshift_main.png](images/1_openshift_main.png)
-
-Go to AutoRAG tab (Hamburger > Gen AI Studio > AutoRAG) and `Create Run`:
-![2_autorag_create_experiment.png](images/2_autorag_create_experiment.png)
-![3_autorag_first_tab.png](images/3_autorag_first_tab.png)
-
-Set experiment name, its description and connection to MaaS (your models):
-![4_set_details.png](images/4_set_details.png)
-
-Pick S3 connection. Then You will be able to browse bucket and pick yours dataset:
-![5_set_s3_connection.png](images/5_set_s3_connection.png)
-![6_pick_documents.png](images/6_pick_documents.png)
-
-Now you need to pick the type of Vector Store (Milvus, PGVector, Neo4j).
-Then pick from Yours S3 or Local Benchmark file against which we will be run experiment.
-Choose what preset You will use:
-![7_pick_vectorstore_benchmark.png](images/7_pick_vectorstore_benchmark.png)
-
-Choose Metric, Max Rag Patterns, Models:
-![8_set_preset_patterns.png](images/8_set_preset_patterns.png)
-
-Then You can press `Create New Run` and You will see:
-![9_fresh experiment.png](images/9_fresh%20experiment.png)
-
-After some time (depends on the size of documents and picked preset) You will see finished experiment
-with proper data, and scores:
-![10_done_experiment.png](images/10_done_experiment.png)
-
-You can try trained patterns in few ways:
-![11_experiment_options.png](images/11_experiment_options.png)
-
-After experiment in your S3 bucket you will see new files created by it. You will find few keys with
-information about the experiment, what documents were use, what kind of patterns we produced etc.
-![12_s3_after_experiment.png](images/12_s3_after_experiment.png)
-
-## Run code-based experiment
-
----
-
-### Choose your data
-
-The bundled English recordings and benchmark are ready at the default paths:
-
-```dotenv
-AUTORAG_INPUT_DATA_KEYS=["data/rag/audio/sample/documents"]
-AUTORAG_TEST_DATA_KEY=data/rag/audio/sample/benchmark.json
-```
-
-To use your own data, drop recordings into `data/rag/audio/users/documents/`, add
-`data/rag/audio/users/benchmark.json`, then change both paths in `.env` to those locations.
-An additional English dataset is available at `data/rag/audio/sample/`: three MP3 recordings,
-a 20-question `benchmark.json` and local reference transcripts. Set the two paths to
-`data/rag/audio/sample/documents` and `data/rag/audio/sample/benchmark.json` to use it.
-
-See the [benchmark example](data/README.md). No preparation command or metadata file is required.
-
-### Configure once
-
-You need an existing RHOAI project, a ready pipeline server with the managed AutoRAG pipelines,
-an S3 bucket, and project Connections for S3, MaaS and Milvus/PGVector.
-Install [uv](https://docs.astral.sh/uv/) and the OpenShift CLI (`oc`) if using your current login.
-
-```bash
-uv sync --frozen
-cp -n .env.example .env
-```
-
-Fill in `.env`:
-
-| Variable | Value |
+| Walkthrough | What you will do |
 | --- | --- |
-| `RHOAI_PROJECT_NAME` | Your RHOAI project |
-| `RHOAI_KFP_URL` | That project's pipeline API URL; leave blank to discover it using `oc` |
-| `INPUT_DATA_BUCKET_NAME` | Bucket to upload the recordings into |
-| `INPUT_DATA_SECRET_NAME` | Project's S3 Connection secret name |
-| `MAAS_SECRET_NAME` | Project's MaaS Connection secret name |
-| `VECTOR_DB_SECRET_NAME` | Project's Milvus/PGVector Connection secret name |
-| `AUTORAG_EMBEDDING_MODELS` | MaaS embedding model IDs, as a JSON array or comma-separated list |
-| `AUTORAG_GENERATION_MODELS` | MaaS generation model IDs, in the same format |
-| `AWS_S3_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Workstation access to the same S3 service, or use your AWS credential chain |
+| [Run via UI](docs/run-via-ui.md) | Prepare your project Connections, create a run in the AutoRAG dashboard, inspect patterns and run indexing. |
+| [Run via code](docs/run-via-code.md) | Fill one `.env` file and use the Python runner to upload data, submit experiments, download results and run indexing. |
 
-For authentication, use `oc login` in your terminal, or fill `RHOAI_TOKEN` and `RHOAI_KFP_URL` in `.env`.
-No need to source the file. It is ignored by Git. Names follow AutoX CI's `.env.rag`; the runner also
-accepts `--env-file /path/to/.env.rag`. Explicit shell variables override file values.
+Both paths execute the experiment on OpenShift AI.
 
-The example enables `AUTORAG_UPLOAD_TEST_DATASETS=true`: the runner reads the two dataset paths
-locally and uploads to those same keys in S3. Set it to `false` to use objects already in S3.
-Change `AUTORAG_INPUT_DATA_KEYS` and `AUTORAG_TEST_DATA_KEY` to switch datasets in either mode.
-Metric `answer_correctness`, four patterns and preset `speed`.
-Use fresh paths when replacing uploaded data; conflicting objects are refused.
+## Before you start
 
-### Run
+You need access to an OpenShift AI cluster and permission to create or use a project.
+Prepare a pipeline server in that project, S3 storage, MaaS embedding and generation models,
+and a Milvus, PGVector or Neo4j database. Add the corresponding secrets to the same project;
+the UI walkthrough also requires Connections that appear in the dashboard selectors.
 
-Leave `AUTORAG_PIPELINE_PATH` blank to use the managed optimization pipeline. To use a compiled local
-pipeline instead, set its path in the same `.env`, for example:
+Each walkthrough starts with its setup checklist. See [prerequisites](docs/prerequisites.md) for
+project creation, Connection setup, required secret keys and ASR requirements.
 
-```dotenv
-AUTORAG_PIPELINE_PATH=/path/to/documents_rag_optimization_pipeline/pipeline.yaml
-```
+## More information
 
-For indexing, `AUTORAG_INDEXING_PIPELINE_PATH` makes the same choice independently. Relative paths
-resolve from the `.env` file's directory. A missing or invalid filled path is an error.
+- [Data preparation and benchmark format](data/README.md)
+- [Compatibility](docs/compatibility.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Validation and acceptance checklist](docs/validation.md)
+- [Local development checks](docs/run-via-code.md#local-development-checks)
 
-```bash
-uv run python scripts/run_experiment.py
-```
-
-The command reads and uploads your audio and benchmark, validates the selected pipeline, then
-creates or reuses the `autorag-audio-sample` experiment. It submits a uniquely named run and waits
-for it. Managed mode discovers and pins an installed version. Local
-mode submits an exact snapshot of your YAML, including Kubernetes platform settings, without
-replacing the managed pipeline. Execution takes place on OpenShift in both modes.
-**You don't create or edit JSON configuration files.** Parameters, full pipeline spec, selected IDs
-and the run receipt are saved automatically under `work/runs/<run-name>/` for troubleshooting.
-Tokens and Connection credentials are not saved there.
-
-With `DOWNLOAD_ARTIFACTS=true` (enabled in `.env.example`), a successful optimization run downloads the
-highest-scoring pattern folder, `starter_kit.zip` and the product leaderboard (when available) to
-`work/runs/<run-name>/artifacts/`. It uses the AWS endpoint and credentials in `.env`.
-The artifact bucket is discovered from the run; set `AWS_S3_BUCKET` if needed.
-If KFP omits the storage root, the input bucket is the fallback. Pattern selection uses the mean score
-for the run's saved optimization metric and requires comparable evaluator scores. On ties, it
-selects the winning pattern named in the product starter kit so both downloads agree. An
-unrecognized kit or a kit for a lower-scoring pattern produces an actionable download error.
-Other pattern folders and logs are skipped; indexing runs download their run-scoped artifacts.
-
-To retry a download without submitting another experiment:
-
-```bash
-uv run python scripts/run_experiment.py --download-run <run-name>
-```
-
-To check `.env` without connecting or submitting:
-
-```bash
-uv run python scripts/run_experiment.py --dry-run
-```
-
-A dry run validates local settings and, when selected, the local YAML and parameter contract.
-Managed pipeline contracts are checked when connected. Data access, model availability and ASR
-compatibility still need a product run. A wait timeout leaves the
-run running; check the printed receipt and pipelines UI before submitting another run.
-
-Local YAML uses the container images it references; changing the pipeline source alone does not
-install an ASR fix in those images.
-
-### Select a pattern, index and ask
-
-With downloads enabled, the selected pattern's `pattern.json`, notebooks and evaluation files are
-saved under `work/runs/<run-name>/artifacts/best-pattern/`, with `starter_kit.zip` and
-`leaderboard.html` beside that folder. If the product version supplies no leaderboard, the runner
-reports that and keeps the other downloads.
-The runner prints the winning name and score and records all ranked scores in the run receipt.
-Check transcript coverage through the pipeline UI; transcript artifacts are not downloaded by this option.
-
-Set these two additional values in the **same `.env`**:
-
-```dotenv
-AUTORAG_PATTERN_FILE=work/runs/<run-name>/artifacts/best-pattern/pattern.json
-AUTORAG_COLLECTION_NAME=audio_sample_001
-```
-
-Use a fresh vector collection, then run:
-
-```bash
-uv run python scripts/run_experiment.py --kind indexing
-```
-
-The runner preserves the selected pattern's model/chunking settings. Its receipt records the
-pattern hash and target collection; `params.json` records the exact indexing arguments.
-Use the downloaded product `inference.ipynb` for the ask step:
-
-1. Open `artifacts/best-pattern/inference.ipynb` in a RHOAI workbench and run **Setup**.
-2. Attach the MaaS and vector database Connections used by the indexing pipeline. In
-   **Prepare MaaS client**, verify `MAAS_BASE_URL` and `MAAS_API_KEY` are available.
-3. In **Initialize Vector Store Client**, replace the generated `collection_name` with your
-   `AUTORAG_COLLECTION_NAME`. Keep the generated embedding model, dimensions and retrieval settings.
-   The generated collection initially refers to optimization data; use the full-corpus index you
-   just created. Keep the provider-specific database variables listed in that notebook aligned
-   with `VECTOR_DB_SECRET_NAME`.
-4. Run the initialization cells through **Query RAG Pattern**, enter a question and inspect the
-   printed response and retrieved sources. You have already populated the collection with the
-   managed indexing pipeline, so skip the separate `indexing.ipynb` walkthrough.
-
-The downloaded starter kit is also a product output. If using it against the new collection,
-update `vector_store.collection_name` in its `agent_config.json` and configure access according to
-its README. This sample does not deploy it automatically.
-
-For the original Polish corpus, try:
-
-> Na jakiej głębokości pod powierzchnią ziemi znajdował się tron Imperatora termitów?
-
-Expected fact: **45 metrów**, supported by `termites_story.wav`. This is a reference answer,
-not an observed result. Verify the retrieved source/excerpt against the recording.
-
-## More options
-
-- [Environment settings and run details](docs/run-on-openshift.md)
-- [Use your own recordings or upload the bundled corpus](data/README.md)
-- [Prerequisites and ASR packaging](docs/prerequisites.md)
-- [Compatibility](docs/compatibility.md), [troubleshooting](docs/troubleshooting.md), [acceptance checklist](docs/validation.md)
-
-The only configuration file is `.env`. Shared implementation lives in `scripts/lib/`.
-Optional answer evidence is collected with `scripts/collect_evidence.py` after the run.
-
-This private sample includes the original Polish corpus (three recordings, 11 questions) and
-an additional English corpus (three recordings, 20 questions).
-A successful sample pipeline run and grounded answer remain to be recorded.
-Public corpus redistribution clearance and listening review remain pending. Original M4A support
-depends on the installed product image.
-Helper code is Apache-2.0; corpus rights are separate. See [NOTICE](NOTICE) and [data provenance](data/rag/audio/sample/README.md).
-
-### Local checks
-
-```bash
-uv sync --frozen --dev
-uv run ruff check .
-uv run ruff format --check .
-uv run python -m unittest discover -s tests
-```
+A complete product walkthrough with recorded optimization/indexing runs and a grounded answer
+remains to be documented. Public corpus redistribution clearance and listening review remain
+pending. Helper code is Apache-2.0; corpus rights are separate. See [NOTICE](NOTICE) and
+[data provenance](data/rag/audio/sample/README.md).

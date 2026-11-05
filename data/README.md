@@ -1,14 +1,16 @@
 # Experiment data
 
-The same two paths select local files and their destinations in S3:
+Use the [UI walkthrough](../docs/run-via-ui.md#prepare-the-sample-data) to upload recordings
+to S3 and select them in the dashboard, or follow the [code walkthrough](../docs/run-via-code.md).
+For the code path, the same two settings select local files and their destinations in S3:
 
 ```dotenv
 AUTORAG_INPUT_DATA_KEYS=["data/rag/audio/sample/documents"]
 AUTORAG_TEST_DATA_KEY=data/rag/audio/sample/benchmark.json
 ```
 
-The bundled Polish recordings and benchmark are ready in those locations. Their provenance is in
-[the sample README](rag/audio/sample/README.md).
+The three bundled English MP3 recordings and 20-question benchmark are ready in those locations.
+Their provenance is in [the sample README](rag/audio/sample/README.md).
 
 ## Use your own recordings
 

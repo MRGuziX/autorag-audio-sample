@@ -7,7 +7,7 @@
       "goat"
     ],
     "correct_answer_document_keys": [
-      "data/rag/audio/sample_1/documents/story_10.mp3"
+      "data/rag/audio/sample/documents/story_10.mp3"
     ]
   },
   {
@@ -17,7 +17,7 @@
       "Ballet pointe shoes"
     ],
     "correct_answer_document_keys": [
-      "data/rag/audio/sample_1/documents/story_10.mp3"
+      "data/rag/audio/sample/documents/story_10.mp3"
     ]
   },
   {
@@ -27,7 +27,7 @@
       "Look around their surroundings and identify possible dangers"
     ],
     "correct_answer_document_keys": [
-      "data/rag/audio/sample_1/documents/story_10.mp3"
+      "data/rag/audio/sample/documents/story_10.mp3"
     ]
   },
   {
@@ -37,7 +37,7 @@
       "He was cleaning the barn"
     ],
     "correct_answer_document_keys": [
-      "data/rag/audio/sample_1/documents/story_10.mp3"
+      "data/rag/audio/sample/documents/story_10.mp3"
     ]
   },
   {
@@ -47,7 +47,7 @@
       "Ballet dancing"
     ],
     "correct_answer_document_keys": [
-      "data/rag/audio/sample_1/documents/story_10.mp3"
+      "data/rag/audio/sample/documents/story_10.mp3"
     ]
   },
   {
@@ -57,7 +57,7 @@
       "A video showing humans dancing ballet"
     ],
     "correct_answer_document_keys": [
-      "data/rag/audio/sample_1/documents/story_10.mp3"
+      "data/rag/audio/sample/documents/story_10.mp3"
     ]
   },
   {
@@ -67,7 +67,7 @@
       "The post became an internet sensation"
     ],
     "correct_answer_document_keys": [
-      "data/rag/audio/sample_1/documents/story_10.mp3"
+      "data/rag/audio/sample/documents/story_10.mp3"
     ]
   },
   {
@@ -76,7 +76,7 @@
       "Rome"
     ],
     "correct_answer_document_keys": [
-      "data/rag/audio/sample_1/documents/story_100.mp3"
+      "data/rag/audio/sample/documents/story_100.mp3"
     ]
   },
   {
@@ -86,7 +86,7 @@
       "Colosseum"
     ],
     "correct_answer_document_keys": [
-      "data/rag/audio/sample_1/documents/story_100.mp3"
+      "data/rag/audio/sample/documents/story_100.mp3"
     ]
   },
   {
@@ -96,7 +96,7 @@
       "Arch of Constantine"
     ],
     "correct_answer_document_keys": [
-      "data/rag/audio/sample_1/documents/story_100.mp3"
+      "data/rag/audio/sample/documents/story_100.mp3"
     ]
   },
   {
@@ -106,7 +106,7 @@
       "To commemorate military victories"
     ],
     "correct_answer_document_keys": [
-      "data/rag/audio/sample_1/documents/story_100.mp3"
+      "data/rag/audio/sample/documents/story_100.mp3"
     ]
   },
   {
@@ -116,7 +116,7 @@
       "Palatine Hill and the Roman Forum"
     ],
     "correct_answer_document_keys": [
-      "data/rag/audio/sample_1/documents/story_100.mp3"
+      "data/rag/audio/sample/documents/story_100.mp3"
     ]
   },
   {
@@ -126,7 +126,7 @@
       "They were pieces of marble statues"
     ],
     "correct_answer_document_keys": [
-      "data/rag/audio/sample_1/documents/story_100.mp3"
+      "data/rag/audio/sample/documents/story_100.mp3"
     ]
   },
   {
@@ -136,7 +136,7 @@
       "The importance of respecting and preserving historical sites for future generations"
     ],
     "correct_answer_document_keys": [
-      "data/rag/audio/sample_1/documents/story_100.mp3"
+      "data/rag/audio/sample/documents/story_100.mp3"
     ]
   },
   {
@@ -145,7 +145,7 @@
       "Carnations"
     ],
     "correct_answer_document_keys": [
-      "data/rag/audio/sample_1/documents/story_1015.mp3"
+      "data/rag/audio/sample/documents/story_1015.mp3"
     ]
   },
   {
@@ -156,7 +156,7 @@
       "Nine carnations"
     ],
     "correct_answer_document_keys": [
-      "data/rag/audio/sample_1/documents/story_1015.mp3"
+      "data/rag/audio/sample/documents/story_1015.mp3"
     ]
   },
   {
@@ -167,7 +167,7 @@
       "36 carnations"
     ],
     "correct_answer_document_keys": [
-      "data/rag/audio/sample_1/documents/story_1015.mp3"
+      "data/rag/audio/sample/documents/story_1015.mp3"
     ]
   },
   {
@@ -178,7 +178,7 @@
       "12 carnations per bouquet"
     ],
     "correct_answer_document_keys": [
-      "data/rag/audio/sample_1/documents/story_1015.mp3"
+      "data/rag/audio/sample/documents/story_1015.mp3"
     ]
   },
   {
@@ -188,7 +188,7 @@
       "Mischievous squirrels"
     ],
     "correct_answer_document_keys": [
-      "data/rag/audio/sample_1/documents/story_1015.mp3"
+      "data/rag/audio/sample/documents/story_1015.mp3"
     ]
   },
   {
@@ -199,7 +199,7 @@
       "10 carnations"
     ],
     "correct_answer_document_keys": [
-      "data/rag/audio/sample_1/documents/story_1015.mp3"
+      "data/rag/audio/sample/documents/story_1015.mp3"
     ]
   }
 ]

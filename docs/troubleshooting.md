@@ -1,5 +1,8 @@
 # Troubleshooting
 
+Start with the [UI walkthrough](run-via-ui.md) or [code walkthrough](run-via-code.md).
+Check [project and Connection setup](prerequisites.md) when a service or Connection is missing.
+
 | Symptom | Check / next action |
 | --- | --- |
 | Local validation reports a placeholder | Fill the named variable in `.env`; example placeholders are not real model IDs. |

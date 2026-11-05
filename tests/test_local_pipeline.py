@@ -133,9 +133,10 @@ class LocalPipelineTests(unittest.TestCase):
             path = root / "indexing.yaml"
             package(path, "indexing")
             pattern = root / "pattern.json"
-            write_json(pattern, indexing_pattern())
+            write_json(pattern, indexing_pattern("neo4j"))
             env = {
                 **environment(),
+                "VECTOR_DB_SECRET_NAME": "neo4j-db",
                 "AUTORAG_PIPELINE_PATH": "/ignored/optimization.yaml",
                 "AUTORAG_INDEXING_PIPELINE_PATH": str(path),
                 "AUTORAG_PATTERN_FILE": str(pattern),
@@ -151,6 +152,9 @@ class LocalPipelineTests(unittest.TestCase):
             kwargs = client.run_pipeline.call_args.kwargs
             self.assertIn("pipeline_package_path", kwargs)
             self.assertEqual(kwargs["params"]["collection_name"], "new_collection")
+            self.assertEqual(kwargs["params"]["db_secret_name"], "neo4j-db")
+            self.assertEqual(kwargs["params"]["foundation_model_id"], "generation")
+            self.assertEqual(kwargs["params"]["graph_extraction_config"], {"mode": "constrained"})
             client.list_pipelines.assert_not_called()
 
     def test_package_submission_error_keeps_uncertain_receipt(self):

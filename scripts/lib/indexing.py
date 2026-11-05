@@ -18,8 +18,8 @@ def _validated_pattern(pattern: dict, preset: str) -> dict:
     settings = pattern["settings"]
     provider = settings["store_binding"]["provider_type"]
     require(
-        provider in {"milvus", "milvus-remote", "pgvector", "pgvector-remote"},
-        "Use a Milvus or PGVector pattern",
+        provider in {"milvus", "milvus-remote", "pgvector", "pgvector-remote", "neo4j"},
+        "Use a Milvus, PGVector or Neo4j pattern",
     )
     blueprint = pattern["indexing"]["pipeline_spec"]
     require(blueprint["pipeline_name"] == INDEXING_PIPELINE, "Unexpected indexing pipeline in pattern")
@@ -34,6 +34,19 @@ def _validated_pattern(pattern: dict, preset: str) -> dict:
         "chunk_size": settings["chunking"]["chunk_size"],
         "chunk_overlap": settings["chunking"]["chunk_overlap"],
     }
+    if provider == "neo4j":
+        # Graph construction depends on the selected generation model as well as embeddings.
+        generation = settings["generation"]
+        non_placeholder(generation["model_id"], "Neo4j foundation_model_id")
+        require(isinstance(settings["graph_extraction"], dict), "Neo4j graph_extraction must be an object")
+        expected_settings.update(
+            foundation_model_id=generation["model_id"],
+            foundation_model_params={
+                "temperature": generation["temperature"],
+                "max_completion_tokens": generation["max_completion_tokens"],
+            },
+            graph_extraction_config=settings["graph_extraction"],
+        )
     for key, value in expected_settings.items():
         require(params.get(key) == value, f"Pattern blueprint disagrees with selected settings: {key}")
     require(params.get("preset") == preset, "Config preset differs from optimization pattern preset")

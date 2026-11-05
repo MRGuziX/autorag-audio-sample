@@ -23,6 +23,10 @@ Known differences from historical audio benchmarks:
 - Generated indexing blueprints can contain `provider_type` although the target indexing signature
   chooses its backend through secret keys. The adapter validates this known metadata before omitting
   it. Any other unknown field fails instead of being silently discarded.
+- Neo4j connection wiring follows AutoX CI `TC-P-9` (optimization) and `IDX-P-3` (indexing):
+  `NEO4J_*` secret keys select the backend. Indexing preserves and validates the selected pattern's
+  `foundation_model_id`, `foundation_model_params` and `graph_extraction_config`; an installed
+  pipeline missing these supplied parameters is rejected.
 - ASR size/model selection is not a top-level parameter in these inspected signatures. UI audio
   file selection does not imply an ASR settings panel exists.
 - Segment timing in Docling JSON and timing on retrieved vector chunks are separate checks.

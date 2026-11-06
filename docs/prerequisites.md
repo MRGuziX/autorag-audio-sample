@@ -138,7 +138,7 @@ support in the product container.
 
 No disconnected run has been validated for this repository. To establish ASR local-only behavior,
 test the actual product image with complete read-only local weights and external model-host access
-blocked, while allowing required internal S3/MaaS/database/pipeline/DNS connections and writable
+blocked, while allowingg required internal S3/MaaS/database/pipeline/DNS connections and writable
 temporary workspace. Missing weights must produce a clear error without a network fallback.
 
 A fully air-gapped walkthrough also needs mirrored product/model images, offline Python

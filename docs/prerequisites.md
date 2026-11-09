@@ -2,16 +2,19 @@
 
 These services are shared by the [UI walkthrough](run-via-ui.md) and
 [code walkthrough](run-via-code.md).
+The product setup links on this page refer to Red Hat OpenShift AI Self-Managed 3.5.
 
 ## Create or select a project
 
-1. Sign in to the OpenShift AI dashboard and create a project, or select an existing one.
+1. Sign in to the OpenShift AI dashboard and [create a project][rhoai-projects], or select an
+   existing one.
    You need permission to manage its Connections and submit pipeline runs.
-2. Configure the project's pipeline server and S3 artifact storage, then wait for it to become ready.
+2. [Configure the project's pipeline server and S3 artifact storage][rhoai-pipelines], then wait
+   for it to become ready.
 3. When using managed pipelines, confirm that `documents-rag-optimization-pipeline` and
    `documents-indexing-pipeline` are available in that project. The code walkthrough can also
    submit compatible compiled local packages.
-4. Create the storage, MaaS and database Connections in this same project.
+4. [Create the storage, MaaS and database Connections][rhoai-connections] in this same project.
 
 ## Project and services
 
@@ -22,6 +25,7 @@ These services are shared by the [UI walkthrough](run-via-ui.md) and
 - S3-compatible data storage and pipeline artifact storage. They can be different buckets/services.
 - A MaaS service with compatible embedding and generation models for English, or the language of
   your own recordings. Check model availability, context limits and embedding dimensions.
+  See [deploying and managing Models-as-a-Service][rhoai-maas] to configure the service and model access.
 - One supported Milvus, PGVector or Neo4j database. Use a separate sample collection, and confirm the
   database Connection secret selects the same backend as the selected pattern.
 - Sufficient CPU/memory, namespace quota and image-pull access for the installed pipeline. The
@@ -42,6 +46,7 @@ The current source uses these secret keys. Validate them against your installed 
 
 In the selected project's Connections page, create S3 storage, MaaS and database Connections
 with the fields above. The dashboard stores their credentials as Kubernetes secrets.
+Follow [Adding a connection to your project][rhoai-connections] for the dashboard procedure.
 
 For the code walkthrough, use the Kubernetes secret names in `.env`; these can differ from the
 Connections' display names. Set `VECTOR_DB_SECRET_NAME` to the chosen database secret for both
@@ -74,6 +79,7 @@ The normal runner reads `RHOAI_KFP_URL`, optional `RHOAI_TOKEN` and optional `KF
 Without a token it reuses `oc login`; without an endpoint it discovers the project's DSPA route.
 With both token and endpoint set, the OpenShift CLI is not required. Use credentials obtained through
 your cluster's supported login flow. Never paste token values into issues, receipts or committed files.
+See [pipeline server authentication][rhoai-pipelines] for the product's endpoint and token setup procedure.
 
 For getting OpenShift Token (after login into terminal):
 ```commandline
@@ -96,4 +102,9 @@ Docling/Transformers/ffmpeg versions, resource usage and original-format decode 
 You do not need ffmpeg/ffprobe on your workstation to run this starter. Audio decoding happens
 in the pipeline image. Local decoding, if you investigate a file separately, does not establish
 support in the product container.
+
+[rhoai-projects]: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/working_on_projects/using-projects_projects
+[rhoai-pipelines]: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/working_with_ai_pipelines/managing-ai-pipelines_ai-pipelines
+[rhoai-connections]: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/working_on_projects/using-connections_projects
+[rhoai-maas]: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/govern_llm_access_with_models-as-a-service/deploy-and-manage-models-as-a-service
 

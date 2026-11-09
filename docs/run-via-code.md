@@ -10,7 +10,8 @@ Run the commands below from the repository root.
 
 ## Prerequisites
 
-1. Create or select an OpenShift AI project. Configure its pipeline server and artifact storage,
+1. [Create or select an OpenShift AI project][rhoai-projects].
+   [Configure its pipeline server and artifact storage][rhoai-pipelines],
    and wait for the server to become ready. The managed optimization and indexing pipelines must
    be available when using managed mode.
 2. Add secrets in that project for S3 storage, MaaS and a Milvus, PGVector or Neo4j database.
@@ -25,6 +26,9 @@ See [project creation](prerequisites.md#create-or-select-a-project) and
 [required secret keys](prerequisites.md#connections-and-credentials) for shared setup details.
 The runner uses the Kubernetes secret names. Register those secrets as dashboard Connections
 as well if you want to use the [UI walkthrough](run-via-ui.md).
+Follow [Adding a connection to your project][rhoai-connections] for the dashboard procedure and
+[deploying and managing Models-as-a-Service][rhoai-maas] for MaaS setup and model access.
+These product setup links refer to Red Hat OpenShift AI Self-Managed 3.5.
 
 ## Create and fill .env
 
@@ -74,6 +78,7 @@ The pipeline detects the backend from the secret's keys. For Neo4j, see the
 [Connection requirements](prerequisites.md#connections-and-credentials).
 
 For authentication, run `oc login` using your cluster's login instructions.
+See [pipeline server authentication][rhoai-pipelines] for the product's endpoint and token setup procedure.
 Leave `RHOAI_TOKEN` blank to reuse that session; leave `RHOAI_KFP_URL` blank to discover the
 project's pipeline endpoint. Alternatively, fill both `RHOAI_TOKEN` and `RHOAI_KFP_URL` to use
 explicit token authentication.
@@ -269,7 +274,7 @@ exact submitted arguments.
 
 Use the downloaded product `inference.ipynb` for the ask step:
 
-1. Open `artifacts/best-pattern/inference.ipynb` in an OpenShift AI workbench and run **Setup**.
+1. Open `artifacts/best-pattern/inference.ipynb` in an [OpenShift AI workbench][rhoai-workbenches] and run **Setup**.
 2. Attach the MaaS and database Connections used by the indexing pipeline.
    In **Prepare MaaS client**, verify that `MAAS_BASE_URL` and `MAAS_API_KEY` are available.
 3. In **Initialize Vector Store Client** (or **Connect to the Neo4j graph**), replace the
@@ -306,3 +311,9 @@ uv run python -m unittest discover -s tests
 ```
 
 [Back to the sample overview](../README.md)
+
+[rhoai-projects]: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/working_on_projects/using-projects_projects
+[rhoai-pipelines]: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/working_with_ai_pipelines/managing-ai-pipelines_ai-pipelines
+[rhoai-connections]: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/working_on_projects/using-connections_projects
+[rhoai-maas]: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/govern_llm_access_with_models-as-a-service/deploy-and-manage-models-as-a-service
+[rhoai-workbenches]: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/working_on_projects/using-project-workbenches_projects

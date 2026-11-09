@@ -28,6 +28,10 @@ the UI walkthrough also requires Connections that appear in the dashboard select
 Each walkthrough starts with its setup checklist. See [prerequisites](docs/prerequisites.md) for
 project creation, Connection setup, required secret keys and ASR requirements.
 
+For cluster installation and configuration, use the
+[Red Hat OpenShift AI Self-Managed 3.5 documentation](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5).
+The walkthroughs link to the relevant product setup procedures.
+
 ## More information
 
 - [Data preparation and benchmark format](data/README.md)

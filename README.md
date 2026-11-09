@@ -20,13 +20,17 @@ Both paths execute the experiment on OpenShift AI.
 
 ## Before you start
 
-You need access to an OpenShift AI cluster and permission to create or use a project.
+You need access to an OpenShift AI cluster and created project or option to create one.
 Prepare a pipeline server in that project, S3 storage, MaaS embedding and generation models,
 and a Milvus, PGVector or Neo4j database. Add the corresponding secrets to the same project;
 the UI walkthrough also requires Connections that appear in the dashboard selectors.
 
 Each walkthrough starts with its setup checklist. See [prerequisites](docs/prerequisites.md) for
 project creation, Connection setup, required secret keys and ASR requirements.
+
+For cluster installation and configuration, use the
+[Red Hat OpenShift AI Self-Managed 3.5 documentation](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5).
+The walkthroughs link to the relevant product setup procedures.
 
 ## More information
 

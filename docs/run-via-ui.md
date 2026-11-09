@@ -9,18 +9,21 @@ and use a selected pattern for questions or full-corpus indexing.
 
 Before creating a run:
 
-1. Sign in to OpenShift AI and create a project, or select an existing project you can use.
-2. Configure the project's pipeline server and its artifact storage. Wait until the server is
-   ready and the managed AutoRAG optimization and indexing pipelines are available.
-3. Add Connections in that project for S3 storage, MaaS and your selected database:
+1. Sign in to OpenShift AI and [create a project][rhoai-projects], or select an existing project
+   you can use.
+2. [Configure the project's pipeline server and its artifact storage][rhoai-pipelines]. Wait until
+   the server is ready and the managed AutoRAG optimization and indexing pipelines are available.
+3. [Add Connections][rhoai-connections] in that project for S3 storage, MaaS and your selected database:
    Milvus, PGVector or Neo4j. Check that they appear in the AutoRAG selectors.
-4. Make sure MaaS serves the embedding and generation models you intend to select.
+4. Make sure [MaaS serves the embedding and generation models][rhoai-maas] you intend to select.
 5. Upload the recordings to S3 and prepare a benchmark with source keys matching those recordings.
 
 See [project setup](prerequisites.md#create-or-select-a-project) and
 [Connection requirements](prerequisites.md#connections-and-credentials) for the required secret keys.
 If you already have Kubernetes secrets, register them as
-[dashboard Connections](prerequisites.md#make-existing-secrets-visible-in-the-ui) before using the selectors.
+[dashboard Connections][rhoai-connections] before using the selectors.
+
+The product setup links in this walkthrough refer to Red Hat OpenShift AI Self-Managed 3.5.
 
 Configuration for this walkthrough is entered in the dashboard.
 
@@ -44,6 +47,12 @@ The S3 Connection must provide access to the selected bucket and recordings. Use
 [benchmark format](../data/README.md) when preparing your own data. If you choose different S3 keys,
 update every corresponding `correct_answer_document_keys` entry in the benchmark.
 
+>!note
+> Why that path `data/rag/audio/sample/benchmark.json` need to be exact the same?
+> Because we are using in the AI4RAG repository precise key paths. Which mean that
+> file benchmark.json need to provide the full path to the targeted files for questions.
+> You can use your own files, but remember that You need to write a full correct path.
+
 ## Open AutoRAG
 
 Sign in to the cluster and open the OpenShift AI dashboard.
@@ -51,6 +60,8 @@ Sign in to the cluster and open the OpenShift AI dashboard.
 ![OpenShift cluster landing page](../images/1_openshift_main.png)
 
 Go to **Gen AI Studio → AutoRAG**, select your project and choose **Create Run**.
+If AutoRAG is unavailable, ask your administrator to check the
+[dashboard configuration options][rhoai-dashboard].
 
 ![Open AutoRAG](../images/2_autorag_create_experiment.png)
 
@@ -112,7 +123,7 @@ Verify that transcription covered each selected recording.
 ![Completed experiment and pattern scores](../images/10_done_experiment.png)
 
 The run creates artifacts in S3 containing experiment information, patterns and evaluation
-results. Use the run's artifact links or your storage browser to inspect them.
+results. Use the run's artifact links or your storage browser to inspect them Runs → Artifacts.
 
 ![Experiment artifacts in S3](../images/12_s3_after_experiment.png)
 
@@ -132,7 +143,7 @@ To start indexing from the dashboard:
 2. Enter a run name and optional description. Expand **Show run parameters** to review the
    saved input paths, collection, models and Connection secret names.
 3. Choose **Run**, follow its progress on the **Runs** page and wait for it to complete successfully.
-4. Save the pattern's inference notebook and open it in an OpenShift AI workbench.
+4. Save the pattern's inference notebook and open it in an [OpenShift AI workbench][rhoai-workbenches].
    Attach the MaaS and database Connections, then set its `collection_name` to the collection
    populated by the indexing run.
 5. Run the setup and inference cells. Preserve the generated embedding and retrieval settings;
@@ -155,3 +166,10 @@ Record the optimization and indexing run IDs, selected pattern, collection and o
 See the [acceptance checklist](validation.md) for the remaining product checks.
 
 [Back to the sample overview](../README.md)
+
+[rhoai-projects]: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/working_on_projects/using-projects_projects
+[rhoai-pipelines]: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/working_with_ai_pipelines/managing-ai-pipelines_ai-pipelines
+[rhoai-connections]: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/working_on_projects/using-connections_projects
+[rhoai-maas]: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/govern_llm_access_with_models-as-a-service/deploy-and-manage-models-as-a-service
+[rhoai-dashboard]: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/managing_resources/customizing-the-dashboard
+[rhoai-workbenches]: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/working_on_projects/using-project-workbenches_projects

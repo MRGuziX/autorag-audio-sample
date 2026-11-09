@@ -10,7 +10,8 @@ Run the commands below from the repository root.
 
 ## Prerequisites
 
-1. Create or select an OpenShift AI project. Configure its pipeline server and artifact storage,
+1. [Create or select an OpenShift AI project][rhoai-projects].
+   [Configure its pipeline server and artifact storage][rhoai-pipelines],
    and wait for the server to become ready. The managed optimization and indexing pipelines must
    be available when using managed mode.
 2. Add secrets in that project for S3 storage, MaaS and a Milvus, PGVector or Neo4j database.
@@ -25,6 +26,9 @@ See [project creation](prerequisites.md#create-or-select-a-project) and
 [required secret keys](prerequisites.md#connections-and-credentials) for shared setup details.
 The runner uses the Kubernetes secret names. Register those secrets as dashboard Connections
 as well if you want to use the [UI walkthrough](run-via-ui.md).
+Follow [Adding a connection to your project][rhoai-connections] for the dashboard procedure and
+[deploying and managing Models-as-a-Service][rhoai-maas] for MaaS setup and model access.
+These product setup links refer to Red Hat OpenShift AI Self-Managed 3.5.
 
 ## Create and fill .env
 
@@ -36,85 +40,6 @@ cp -n .env.example .env
 ```
 
 Fill the following values in `.env` before running:
-
-| Variable | Value |
-| --- | --- |
-| `RHOAI_PROJECT_NAME` | The project you created or selected |
-| `INPUT_DATA_BUCKET_NAME` | Bucket containing, or receiving, your recordings |
-| `INPUT_DATA_SECRET_NAME` | Project's S3 secret name |
-| `MAAS_SECRET_NAME` | Project's MaaS secret name |
-| `VECTOR_DB_SECRET_NAME` | Project's Milvus, PGVector or Neo4j secret name |
-| `AUTORAG_EMBEDDING_MODELS` | MaaS embedding model IDs, as a JSON array or comma-separated list |
-| `AUTORAG_GENERATION_MODELS` | MaaS generation model IDs, in the same format |
-| `AWS_S3_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Workstation S3 access for uploads and downloads, or use your AWS credential chain |
-
-Choose the database through `VECTOR_DB_SECRET_NAME`. For example, secrets named `milvus`,
-`pgvector` and `neo4j` select those respective connections when they exist in your project.
-The pipeline detects the backend from the secret's keys. For Neo4j, see the
-[Connection requirements](prerequisites.md#connections-and-credentials).
-
-For authentication, run `oc login` using your cluster's login instructions.
-Leave `RHOAI_TOKEN` blank to reuse that session; leave `RHOAI_KFP_URL` blank to discover the
-project's pipeline endpoint. Alternatively, fill both `RHOAI_TOKEN` and `RHOAI_KFP_URL` to use
-explicit token authentication.
-
-The runner reads `.env` directly. Keep it local and ignored by Git; do not source it.
-Explicit shell variables override file values. Connection passwords and MaaS API keys belong in
-the project secrets; the corresponding `.env` settings contain secret names.
-
-## Choose your data
-
-The bundled sample contains three English MP3 recordings and 20 benchmark questions.
-Keep these defaults to use it:
-
-```dotenv
-AUTORAG_INPUT_DATA_KEYS=["data/rag/audio/sample/documents"]
-AUTORAG_TEST_DATA_KEY=data/rag/audio/sample/benchmark.json
-AUTORAG_UPLOAD_TEST_DATASETS=true
-DOWNLOAD_ARTIFACTS=true
-```
-
-With uploads enabled, the runner reads the two paths locally and uploads to those same keys in S3.
-Local uploads require the same bucket and Connection for recordings and benchmark.
-Use fresh paths when replacing uploaded data; conflicting objects are refused.
-
-To use recordings already in S3, set `AUTORAG_UPLOAD_TEST_DATASETS=false` and set both dataset
-paths to their existing object keys. Workstation S3 credentials are still needed when
-`DOWNLOAD_ARTIFACTS=true`.
-
-To use your own data, put recordings in `data/rag/audio/users/documents/`, create
-`data/rag/audio/users/benchmark.json`, and change both paths in `.env`.
-See [data preparation and the benchmark format](../data/README.md).
-
-## Validate and run
-
-The example uses metric `answer_correctness`, four patterns and preset `speed`.
-Leave `AUTORAG_PIPELINE_PATH` blank to use the managed optimization pipeline.
-See [pipeline source](#pipeline-source) to submit a compiled local YAML instead.
-
-Check local inputs, then submit:
-
-```bash
-uv run python scripts/run_experiment.py --dry-run
-uv run python scripts/run_experiment.py
-```
-
-A dry run validates local settings and, when selected, the local YAML and parameter contract.
-Managed pipeline contracts are checked when connected. Data access, model availability and
-ASR compatibility still need a product run.
-
-The second command uploads the dataset when enabled, validates the selected pipeline, creates
-or reuses the `autorag-audio-sample` experiment, submits a uniquely named run and waits for it.
-Managed mode discovers and pins an installed version. Generated parameters, the pipeline spec
-and the receipt are saved under `work/runs/<run-name>/`; these files are created automatically.
-
-A timeout leaves the remote run running. Check the receipt and pipeline UI before starting
-another run. See [outputs and failures](#outputs-and-failures) for recovery details.
-
-## Settings reference
-
-Core variables use the AutoX CI `.env.rag` names. Audio scenario settings that AutoX keeps in
-`optimisation_test_configs.json` are available as `AUTORAG_*` values in this same file.
 
 | Variable | Meaning/default |
 | --- | --- |
@@ -145,28 +70,77 @@ Core variables use the AutoX CI `.env.rag` names. Audio scenario settings that A
 
 Use your actual MaaS model IDs, with support for the language of your recordings. Secrets must be
 present in the selected project, not just defined in a different project. The managed product image
-must include its supported ASR model and audio decoder; there is no separate transcription service
-to configure in this sample. The TC-P-5 fixture includes M4A; its old `.mp4` description is stale.
+must include its supported ASR model and audio decoder.
 
-### Reuse AutoX CI settings
+Choose the database through `VECTOR_DB_SECRET_NAME`. For example, secrets named `milvus`,
+`pgvector` and `neo4j` select those respective connections when they exist in your project.
+The pipeline detects the backend from the secret's keys. For Neo4j, see the
+[Connection requirements](prerequisites.md#connections-and-credentials).
 
-To reuse the CI environment directly:
+For authentication, run `oc login` using your cluster's login instructions.
+See [pipeline server authentication][rhoai-pipelines] for the product's endpoint and token setup procedure.
+Leave `RHOAI_TOKEN` blank to reuse that session; leave `RHOAI_KFP_URL` blank to discover the
+project's pipeline endpoint. Alternatively, fill both `RHOAI_TOKEN` and `RHOAI_KFP_URL` to use
+explicit token authentication.
 
-```bash
-uv run python scripts/run_experiment.py --env-file /path/to/autox-ci/autox_tests/.env.rag
+The runner reads `.env` directly. Keep it local and ignored by Git; do not source it.
+Explicit shell variables override file values. Connection passwords and MaaS API keys belong in
+the project secrets; the corresponding `.env` settings contain secret names.
+
+## Choose your data
+
+The bundled sample contains three English MP3 recordings and 20 benchmark questions.
+Keep these defaults to use it:
+
+```dotenv
+AUTORAG_INPUT_DATA_KEYS=["data/rag/audio/sample/documents"]
+AUTORAG_TEST_DATA_KEY=data/rag/audio/sample/benchmark.json
+AUTORAG_UPLOAD_TEST_DATASETS=true
+DOWNLOAD_ARTIFACTS=true
 ```
 
-When the upload flag is absent, existing S3 objects are used. Set both dataset paths to the CI
-fixture locations when reusing its `.env.rag`. The starter example explicitly enables local uploads.
-For Neo4j, set this sample's `VECTOR_DB_SECRET_NAME` to the secret named by CI's
-`NEO4J_DB_SECRET_NAME` (used in `TC-P-9` and `IDX-P-3`). The sample selects one database through
-`VECTOR_DB_SECRET_NAME`; it does not apply CI scenario overrides. The selected Neo4j pattern supplies
-the indexing generation model and graph-extraction settings, so no separate
-`AUTORAG_INDEXING_FOUNDATION_MODEL_ID` is needed here.
+With uploads enabled, the runner reads the two paths locally and uploads to those same keys in S3.
+Local uploads require the same bucket and Connection for recordings and benchmark.
+Use fresh paths when replacing uploaded data; conflicting objects are refused.
 
-Unrelated CI settings are not forwarded to KFP;
-the runner does not provision CI infrastructure, run notebook Jobs or perform CI fixture teardown.
-Explicit shell environment variables override file values; `${...}` interpolation is not used.
+To use recordings already in S3, set `AUTORAG_UPLOAD_TEST_DATASETS=false` and set both dataset
+paths to their existing object keys. Workstation S3 credentials are still needed when
+`DOWNLOAD_ARTIFACTS=true`.
+
+>!note
+> Why that path `data/rag/audio/sample/benchmark.json` need to be exact the same?
+> Because we are using in the AI4RAG repository precise key paths. Which mean that
+> file benchmark.json need to provide the full path to the targeted files for questions.
+> You can use your own files, but remember that You need to write a full correct path.
+
+To use your own data, put recordings in `data/rag/audio/users/documents/`, create
+`data/rag/audio/users/benchmark.json`, and change both paths in `.env`.
+See [data preparation and the benchmark format](../data/README.md).
+
+## Validate and run
+
+The example uses metric `answer_correctness`, four patterns and preset `speed`.
+Leave `AUTORAG_PIPELINE_PATH` blank to use the managed optimization pipeline.
+See [pipeline source](#pipeline-source) to submit a compiled local YAML instead.
+
+Check local inputs, then submit:
+
+```bash
+uv run python scripts/run_experiment.py --dry-run
+uv run python scripts/run_experiment.py
+```
+
+A dry run validates local settings and, when selected, the local YAML and parameter contract.
+Managed pipeline contracts are checked when connected. Data access, model availability and
+ASR compatibility still need a product run.
+
+The second command uploads the dataset when enabled, validates the selected pipeline, creates
+or reuses the `autorag-audio-sample` experiment, submits a uniquely named run and waits for it.
+Managed mode discovers and pins an installed version. Generated parameters, the pipeline spec
+and the receipt are saved under `work/runs/<run-name>/`; these files are created automatically.
+
+A timeout leaves the remote run running. Check the receipt and pipeline UI before starting
+another run. See [outputs and failures](#outputs-and-failures) for recovery details.
 
 ## Pipeline source
 
@@ -300,7 +274,7 @@ exact submitted arguments.
 
 Use the downloaded product `inference.ipynb` for the ask step:
 
-1. Open `artifacts/best-pattern/inference.ipynb` in an OpenShift AI workbench and run **Setup**.
+1. Open `artifacts/best-pattern/inference.ipynb` in an [OpenShift AI workbench][rhoai-workbenches] and run **Setup**.
 2. Attach the MaaS and database Connections used by the indexing pipeline.
    In **Prepare MaaS client**, verify that `MAAS_BASE_URL` and `MAAS_API_KEY` are available.
 3. In **Initialize Vector Store Client** (or **Connect to the Neo4j graph**), replace the
@@ -337,3 +311,9 @@ uv run python -m unittest discover -s tests
 ```
 
 [Back to the sample overview](../README.md)
+
+[rhoai-projects]: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/working_on_projects/using-projects_projects
+[rhoai-pipelines]: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/working_with_ai_pipelines/managing-ai-pipelines_ai-pipelines
+[rhoai-connections]: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/working_on_projects/using-connections_projects
+[rhoai-maas]: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/govern_llm_access_with_models-as-a-service/deploy-and-manage-models-as-a-service
+[rhoai-workbenches]: https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/working_on_projects/using-project-workbenches_projects

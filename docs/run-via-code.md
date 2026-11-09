@@ -102,6 +102,12 @@ To use recordings already in S3, set `AUTORAG_UPLOAD_TEST_DATASETS=false` and se
 paths to their existing object keys. Workstation S3 credentials are still needed when
 `DOWNLOAD_ARTIFACTS=true`.
 
+>!note
+> Why that path `data/rag/audio/sample/benchmark.json` need to be exact the same?
+> Because we are using in the AI4RAG repository precise key paths. Which mean that
+> file benchmark.json need to provide the full path to the targeted files for questions.
+> You can use your own files, but remember that You need to write a full correct path.
+
 To use your own data, put recordings in `data/rag/audio/users/documents/`, create
 `data/rag/audio/users/benchmark.json`, and change both paths in `.env`.
 See [data preparation and the benchmark format](../data/README.md).

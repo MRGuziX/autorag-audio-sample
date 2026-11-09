@@ -118,7 +118,7 @@ Verify that transcription covered each selected recording.
 ![Completed experiment and pattern scores](../images/10_done_experiment.png)
 
 The run creates artifacts in S3 containing experiment information, patterns and evaluation
-results. Use the run's artifact links or your storage browser to inspect them.
+results. Use the run's artifact links or your storage browser to inspect them Runs → Artifacts.
 
 ![Experiment artifacts in S3](../images/12_s3_after_experiment.png)
 

@@ -20,7 +20,7 @@ Both paths execute the experiment on OpenShift AI.
 
 ## Before you start
 
-You need access to an OpenShift AI cluster and permission to create or use a project.
+You need access to an OpenShift AI cluster and created project or option to create one.
 Prepare a pipeline server in that project, S3 storage, MaaS embedding and generation models,
 and a Milvus, PGVector or Neo4j database. Add the corresponding secrets to the same project;
 the UI walkthrough also requires Connections that appear in the dashboard selectors.

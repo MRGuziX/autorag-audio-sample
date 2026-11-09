@@ -13,16 +13,6 @@ These services are shared by the [UI walkthrough](run-via-ui.md) and
    submit compatible compiled local packages.
 4. Create the storage, MaaS and database Connections in this same project.
 
-If you create a project through the OpenShift CLI instead, register it with the dashboard:
-
-```bash
-oc new-project my-rag-project
-oc label namespace my-rag-project opendatahub.io/dashboard=true --overwrite
-```
-
-Replace `my-rag-project` with your chosen project name. For an existing project, select it in
-the dashboard or with `oc project my-rag-project`, then complete the pipeline and Connection setup.
-
 ## Project and services
 
 - A RHOAI project with a ready Data Science Pipelines Application and access to the managed
@@ -52,15 +42,6 @@ The current source uses these secret keys. Validate them against your installed 
 
 In the selected project's Connections page, create S3 storage, MaaS and database Connections
 with the fields above. The dashboard stores their credentials as Kubernetes secrets.
-You can also add a secret from a local manifest:
-
-```bash
-oc create -n my-rag-project -f /path/to/connection-secret.yaml
-```
-
-The manifest must contain the keys for one Connection from the table above. Keep credential
-manifests outside version control. Creating a secret this way requires the registration described
-[below](#make-existing-secrets-visible-in-the-ui) before using it through the UI.
 
 For the code walkthrough, use the Kubernetes secret names in `.env`; these can differ from the
 Connections' display names. Set `VECTOR_DB_SECRET_NAME` to the chosen database secret for both
@@ -74,29 +55,6 @@ from the optimized pattern to rebuild its knowledge graph.
 Secrets contain credentials; pipeline arguments contain their names only. Existing audio and
 benchmark data may use separate buckets and Connections. Code-based local uploads require the
 same bucket and Connection for both; leave `TEST_DATA_*` blank to inherit the input settings.
-
-## Make existing secrets visible in the UI
-
-A Kubernetes secret also needs dashboard Connection metadata to appear in the project's
-Connections list. Check its required fields before registering it. For an existing PGVector
-secret named `pgvector`, for example:
-
-```bash
-oc label secret pgvector -n my-rag-project opendatahub.io/dashboard=true --overwrite
-oc annotate secret pgvector -n my-rag-project \
-  openshift.io/display-name=pgvector \
-  opendatahub.io/connection-type=vector-db \
-  opendatahub.io/vector-db-provider=pgvector --overwrite
-```
-
-For Milvus, use your Milvus secret name and set the provider annotation to `milvus`.
-For Neo4j, use `opendatahub.io/connection-type=database` and
-`opendatahub.io/database-provider=neo4j`. These commands update metadata on an existing secret;
-the Connection still needs valid credentials and a reachable database.
-
-For S3 and MaaS, create the Connections through the dashboard's corresponding forms.
-Refresh the AutoRAG page and confirm that the Connections appear in the storage, model and
-database selectors for the selected project.
 
 ## Code authentication and workstation access
 
@@ -117,6 +75,11 @@ Without a token it reuses `oc login`; without an endpoint it discovers the proje
 With both token and endpoint set, the OpenShift CLI is not required. Use credentials obtained through
 your cluster's supported login flow. Never paste token values into issues, receipts or committed files.
 
+For getting OpenShift Token (after login into terminal):
+```commandline
+oc whoami -t
+```
+
 ## Audio and ASR
 
 The product extraction image must supply its supported Docling ASR backend, ffmpeg/decoder
@@ -134,13 +97,3 @@ You do not need ffmpeg/ffprobe on your workstation to run this starter. Audio de
 in the pipeline image. Local decoding, if you investigate a file separately, does not establish
 support in the product container.
 
-## Disconnected environments
-
-No disconnected run has been validated for this repository. To establish ASR local-only behavior,
-test the actual product image with complete read-only local weights and external model-host access
-blocked, while allowingg required internal S3/MaaS/database/pipeline/DNS connections and writable
-temporary workspace. Missing weights must produce a clear error without a network fallback.
-
-A fully air-gapped walkthrough also needs mirrored product/model images, offline Python
-dependencies and reachable internal services. Do not infer that broader support from a local-only
-ASR test. Keep separate results in the validation record.

@@ -37,16 +37,36 @@ cp -n .env.example .env
 
 Fill the following values in `.env` before running:
 
-| Variable | Value |
+| Variable | Meaning/default |
 | --- | --- |
-| `RHOAI_PROJECT_NAME` | The project you created or selected |
-| `INPUT_DATA_BUCKET_NAME` | Bucket containing, or receiving, your recordings |
-| `INPUT_DATA_SECRET_NAME` | Project's S3 secret name |
-| `MAAS_SECRET_NAME` | Project's MaaS secret name |
-| `VECTOR_DB_SECRET_NAME` | Project's Milvus, PGVector or Neo4j secret name |
-| `AUTORAG_EMBEDDING_MODELS` | MaaS embedding model IDs, as a JSON array or comma-separated list |
-| `AUTORAG_GENERATION_MODELS` | MaaS generation model IDs, in the same format |
-| `AWS_S3_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Workstation S3 access for uploads and downloads, or use your AWS credential chain |
+| `RHOAI_PROJECT_NAME` | Required existing project |
+| `RHOAI_KFP_URL` | HTTPS pipeline API route; discovered with `oc` if blank |
+| `RHOAI_TOKEN` | Optional token; otherwise use current `oc` login |
+| `AUTORAG_PIPELINE_PATH` | Optional compiled local optimization YAML; blank/unset uses managed |
+| `AUTORAG_INDEXING_PIPELINE_PATH` | Optional compiled local indexing YAML; blank/unset uses managed |
+| `INPUT_DATA_SECRET_NAME`, `INPUT_DATA_BUCKET_NAME` | Required audio Connection and bucket |
+| `TEST_DATA_SECRET_NAME`, `TEST_DATA_BUCKET_NAME` | Benchmark Connection and bucket; blank inherits input values |
+| `MAAS_SECRET_NAME`, `VECTOR_DB_SECRET_NAME` | Required existing inference and DB Connections |
+| `AUTORAG_EMBEDDING_MODELS`, `AUTORAG_GENERATION_MODELS` | Required JSON arrays or comma-separated MaaS IDs |
+| `AUTORAG_UPLOAD_TEST_DATASETS` | Example sets `true` to upload local inputs; `false` uses existing S3 inputs |
+| `AWS_S3_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION` | Workstation access to the same S3 storage as the input Connection; required for local uploads |
+| `AWS_SESSION_TOKEN` | Optional session token when using temporary AWS credentials |
+| `DOWNLOAD_ARTIFACTS` | Example sets `true`: download the best optimization pattern and starter kit after success; absent/`false` skips downloads |
+| `AWS_S3_BUCKET` | Optional artifact bucket override; also accepts `RHOAI_TEST_ARTIFACTS_BUCKET`; blank discovers the run root, then falls back to the input bucket |
+| `AUTORAG_INPUT_DATA_KEYS` | One documents directory; local upload source and S3 destination; defaults to `["data/rag/audio/sample/documents"]` |
+| `AUTORAG_TEST_DATA_KEY` | Benchmark JSON path; local upload source and S3 destination; defaults to `data/rag/audio/sample/benchmark.json` |
+| `AUTORAG_OPTIMIZATION_METRIC` | `answer_correctness` |
+| `AUTORAG_MAX_RAG_PATTERNS` | `4` (supported range 4–10) |
+| `AUTORAG_PRESET` | `speed` or `balanced` |
+| `AUTORAG_EXPERIMENT_NAME` | `autorag-audio-sample` |
+| `RHOAI_PIPELINE_RUN_TIMEOUT` | Wait timeout in seconds, `7200` |
+| `AUTORAG_RUN_NAME` | Optional fixed name; defaults to a unique name on each invocation |
+| `KFP_CA_CERT` | Optional private CA file; TLS verification stays enabled |
+| `RHOAI_DSPA_NAME`, `AUTORAG_OC_CONTEXT` | Optional DSPA/context for `oc` discovery |
+
+Use your actual MaaS model IDs, with support for the language of your recordings. Secrets must be
+present in the selected project, not just defined in a different project. The managed product image
+must include its supported ASR model and audio decoder.
 
 Choose the database through `VECTOR_DB_SECRET_NAME`. For example, secrets named `milvus`,
 `pgvector` and `neo4j` select those respective connections when they exist in your project.
@@ -110,63 +130,6 @@ and the receipt are saved under `work/runs/<run-name>/`; these files are created
 
 A timeout leaves the remote run running. Check the receipt and pipeline UI before starting
 another run. See [outputs and failures](#outputs-and-failures) for recovery details.
-
-## Settings reference
-
-Core variables use the AutoX CI `.env.rag` names. Audio scenario settings that AutoX keeps in
-`optimisation_test_configs.json` are available as `AUTORAG_*` values in this same file.
-
-| Variable | Meaning/default |
-| --- | --- |
-| `RHOAI_PROJECT_NAME` | Required existing project |
-| `RHOAI_KFP_URL` | HTTPS pipeline API route; discovered with `oc` if blank |
-| `RHOAI_TOKEN` | Optional token; otherwise use current `oc` login |
-| `AUTORAG_PIPELINE_PATH` | Optional compiled local optimization YAML; blank/unset uses managed |
-| `AUTORAG_INDEXING_PIPELINE_PATH` | Optional compiled local indexing YAML; blank/unset uses managed |
-| `INPUT_DATA_SECRET_NAME`, `INPUT_DATA_BUCKET_NAME` | Required audio Connection and bucket |
-| `TEST_DATA_SECRET_NAME`, `TEST_DATA_BUCKET_NAME` | Benchmark Connection and bucket; blank inherits input values |
-| `MAAS_SECRET_NAME`, `VECTOR_DB_SECRET_NAME` | Required existing inference and DB Connections |
-| `AUTORAG_EMBEDDING_MODELS`, `AUTORAG_GENERATION_MODELS` | Required JSON arrays or comma-separated MaaS IDs |
-| `AUTORAG_UPLOAD_TEST_DATASETS` | Example sets `true` to upload local inputs; `false` uses existing S3 inputs |
-| `AWS_S3_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION` | Workstation access to the same S3 storage as the input Connection; required for local uploads |
-| `AWS_SESSION_TOKEN` | Optional session token when using temporary AWS credentials |
-| `DOWNLOAD_ARTIFACTS` | Example sets `true`: download the best optimization pattern and starter kit after success; absent/`false` skips downloads |
-| `AWS_S3_BUCKET` | Optional artifact bucket override; also accepts `RHOAI_TEST_ARTIFACTS_BUCKET`; blank discovers the run root, then falls back to the input bucket |
-| `AUTORAG_INPUT_DATA_KEYS` | One documents directory; local upload source and S3 destination; defaults to `["data/rag/audio/sample/documents"]` |
-| `AUTORAG_TEST_DATA_KEY` | Benchmark JSON path; local upload source and S3 destination; defaults to `data/rag/audio/sample/benchmark.json` |
-| `AUTORAG_OPTIMIZATION_METRIC` | `answer_correctness` |
-| `AUTORAG_MAX_RAG_PATTERNS` | `4` (supported range 4–10) |
-| `AUTORAG_PRESET` | `speed` or `balanced` |
-| `AUTORAG_EXPERIMENT_NAME` | `autorag-audio-sample` |
-| `RHOAI_PIPELINE_RUN_TIMEOUT` | Wait timeout in seconds, `7200` |
-| `AUTORAG_RUN_NAME` | Optional fixed name; defaults to a unique name on each invocation |
-| `KFP_CA_CERT` | Optional private CA file; TLS verification stays enabled |
-| `RHOAI_DSPA_NAME`, `AUTORAG_OC_CONTEXT` | Optional DSPA/context for `oc` discovery |
-
-Use your actual MaaS model IDs, with support for the language of your recordings. Secrets must be
-present in the selected project, not just defined in a different project. The managed product image
-must include its supported ASR model and audio decoder; there is no separate transcription service
-to configure in this sample. The TC-P-5 fixture includes M4A; its old `.mp4` description is stale.
-
-### Reuse AutoX CI settings
-
-To reuse the CI environment directly:
-
-```bash
-uv run python scripts/run_experiment.py --env-file /path/to/autox-ci/autox_tests/.env.rag
-```
-
-When the upload flag is absent, existing S3 objects are used. Set both dataset paths to the CI
-fixture locations when reusing its `.env.rag`. The starter example explicitly enables local uploads.
-For Neo4j, set this sample's `VECTOR_DB_SECRET_NAME` to the secret named by CI's
-`NEO4J_DB_SECRET_NAME` (used in `TC-P-9` and `IDX-P-3`). The sample selects one database through
-`VECTOR_DB_SECRET_NAME`; it does not apply CI scenario overrides. The selected Neo4j pattern supplies
-the indexing generation model and graph-extraction settings, so no separate
-`AUTORAG_INDEXING_FOUNDATION_MODEL_ID` is needed here.
-
-Unrelated CI settings are not forwarded to KFP;
-the runner does not provision CI infrastructure, run notebook Jobs or perform CI fixture teardown.
-Explicit shell environment variables override file values; `${...}` interpolation is not used.
 
 ## Pipeline source
 

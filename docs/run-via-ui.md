@@ -44,6 +44,12 @@ The S3 Connection must provide access to the selected bucket and recordings. Use
 [benchmark format](../data/README.md) when preparing your own data. If you choose different S3 keys,
 update every corresponding `correct_answer_document_keys` entry in the benchmark.
 
+>!note
+> Why that path `data/rag/audio/sample/benchmark.json` need to be exact the same?
+> Because we are using in the AI4RAG repository precise key paths. Which mean that
+> file benchmark.json need to provide the full path to the targeted files for questions.
+> You can use your own files, but remember that You need to write a full correct path.
+
 ## Open AutoRAG
 
 Sign in to the cluster and open the OpenShift AI dashboard.
